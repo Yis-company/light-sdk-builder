@@ -86,7 +86,7 @@ const prepared = await sdk.users.get.prepare({ params: { id: 7 } })
 await queryClient.fetchQuery(preparedQueryOptions(prepared))
 ```
 
-Do not await `prepare` inside client render. Prepared requests capture body, headers, and canonical keys. Keys include namespace, base URL, endpoint identity, and explicit scope; authentication headers are excluded. Raw query options capture their input once. Cache inputs must be plain JSON: omit undefined fields and transform Date/class instances or use `prepare`. Each query execution receives its own captured-input copy. Keep credentials out of cached request inputs.
+Do not await `prepare` inside client render. Prepared requests capture body, headers, and canonical keys. Keys include namespace, base URL, endpoint identity, and explicit scope; authentication headers are excluded. Raw query options capture their input once. Cache inputs must be plain JSON: omit undefined fields, avoid negative zero/nonfinite numbers, and transform Date/class instances or use `prepare`. Each query execution receives its own captured-input copy. Keep credentials out of cached request inputs.
 
 `infiniteQueryOptions({ key, initialPageParam, page, getNextPageParam })` supports cursor or numbered pagination. `page` returns a callable prepared request, synchronously or asynchronously. Finite and infinite queries have different keys.
 

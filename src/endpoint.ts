@@ -89,7 +89,13 @@ export function captureInput<I>(value: I): I {
   const copy = (item: unknown, root = false): unknown => {
     if (item === undefined && root) return undefined
     if (item === null || typeof item === 'string' || typeof item === 'boolean') return item
-    if (typeof item === 'number' && Number.isFinite(item)) return item
+    if (typeof item === 'number') {
+      if (!Number.isFinite(item) || Object.is(item, -0))
+        throw new RequestError(
+          'Use finite JSON numbers other than -0; transform the value or use prepare()',
+        )
+      return item
+    }
     if (!item || typeof item !== 'object') {
       throw new RequestError('Use plain JSON inputs; omit undefined fields or use prepare()')
     }

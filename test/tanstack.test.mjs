@@ -247,3 +247,33 @@ test('raw keys reject Date objects before toJSON; prepared transformed dates rem
     client.clear()
   }
 })
+
+test('raw options reject negative zero instead of sharing the positive-zero cache entry', async () => {
+  const input = z
+    .number()
+    .transform((value) => ({ query: { kind: Object.is(value, -0) ? 'negative' : 'positive' } }))
+  const bound = endpoint({
+    name: 'zero',
+    method: 'GET',
+    path: '/zero',
+    input,
+    responses: { 200: z.object({ name: z.string() }) },
+  }).bind(
+    createClient({
+      baseUrl: 'https://api.example',
+      fetch: async (url) => Response.json({ name: new URL(url).searchParams.get('kind') }),
+    }),
+  )
+  assert.throws(() => queryOptions(bound, -0), /-0/)
+  const client = queryClient()
+  try {
+    assert.deepEqual(await client.fetchQuery(queryOptions(bound, 0, { staleTime: Infinity })), {
+      name: 'positive',
+    })
+    assert.deepEqual(await client.fetchQuery(preparedQueryOptions(await bound.prepare(-0))), {
+      name: 'negative',
+    })
+  } finally {
+    client.clear()
+  }
+})
