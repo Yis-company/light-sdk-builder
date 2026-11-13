@@ -1,0 +1,66 @@
+{
+  "name": "light-sdk-builder",
+  "version": "0.1.0",
+  "description": "Schema-neutral SDK authoring for existing HTTP APIs, with optional TanStack Query integration.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yis-company/light-sdk-builder.git"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./tanstack-query": {
+      "types": "./dist/tanstack-query.d.ts",
+      "import": "./dist/tanstack-query.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p test/types/tsconfig.json",
+    "typecheck:minimum": "node node_modules/typescript-minimum/bin/tsc -p test/types/tsconfig.json",
+    "test": "node --test test/*.test.mjs",
+    "test:package": "node scripts/verify-package.mjs",
+    "prepack": "npm run build",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "test:browser": "node scripts/verify-browser.mjs"
+  },
+  "dependencies": {
+    "@standard-schema/spec": "^1.1.0"
+  },
+  "devDependencies": {
+    "@tanstack/query-core": "5.105.0",
+    "@tanstack/react-query": "5.105.0",
+    "@types/react": "19.3.0",
+    "oxfmt": "0.75.0",
+    "playwright": "1.64.1",
+    "react": "19.3.1",
+    "typescript": "7.0.2",
+    "typescript-minimum": "npm:typescript@5.5.4",
+    "valibot": "1.5.0",
+    "zod": "4.6.7"
+  },
+  "peerDependencies": {
+    "@tanstack/query-core": "^5.105.0"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/query-core": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "bun@1.4.4"
+}
