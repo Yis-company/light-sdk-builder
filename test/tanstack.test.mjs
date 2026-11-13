@@ -191,3 +191,59 @@ for (const cursor of [false, true])
       client.clear()
     }
   })
+
+test('query options capture one input snapshot for both the key and later requests', async () => {
+  const ids = []
+  const bound = definition.bind(
+    createClient({
+      baseUrl: 'https://api.example',
+      fetch: async (url) => {
+        ids.push(url.split('/').at(-1))
+        return Response.json({ name: ids.at(-1) })
+      },
+    }),
+  )
+  const args = { params: { id: 1 } }
+  const options = queryOptions(bound, args)
+  args.params.id = 2
+  const client = queryClient()
+  try {
+    assert.deepEqual(await client.fetchQuery(options), { name: '1' })
+    assert.deepEqual(ids, ['1'])
+    assert.deepEqual(client.getQueryData(bound.key({ params: { id: 1 } })), { name: '1' })
+  } finally {
+    client.clear()
+  }
+})
+
+test('raw keys reject Date objects before toJSON; prepared transformed dates remain supported', async () => {
+  const schema = z
+    .union([z.date(), z.string()])
+    .transform((value) => ({ query: { kind: value instanceof Date ? 'date' : 'string' } }))
+  const route = endpoint({
+    name: 'dates',
+    method: 'GET',
+    path: '/dates',
+    input: schema,
+    responses: { 200: z.object({ name: z.string() }) },
+  }).bind(
+    createClient({
+      baseUrl: 'https://api.example',
+      fetch: async (url) => Response.json({ name: new URL(url).searchParams.get('kind') }),
+    }),
+  )
+  const date = new Date('2026-01-01T00:00:00Z')
+  assert.throws(() => queryOptions(route, date), /plain|JSON/i)
+  assert.notDeepEqual(
+    (await route.prepare(date)).key,
+    (await route.prepare(date.toISOString())).key,
+  )
+  const client = queryClient()
+  try {
+    assert.deepEqual(await client.fetchQuery(preparedQueryOptions(await route.prepare(date))), {
+      name: 'date',
+    })
+  } finally {
+    client.clear()
+  }
+})

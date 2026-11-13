@@ -16,6 +16,7 @@ import {
   type Queryable,
   type Success,
 } from './index.js'
+import { captureInput } from './endpoint.js'
 
 export type QueryOverrides<T, Selected> = Omit<
   QueryObserverOptions<T, Error, Selected, T, QueryKey>,
@@ -37,12 +38,13 @@ export function queryOptions<I, T extends HttpResult, Selected = Success<T>>(
   input: I,
   options?: QueryOverrides<Success<T>, Selected>,
 ): BuiltQueryOptions<Success<T>, Selected> {
+  const captured = captureInput(input)
   return {
     retry: false as const,
     ...options,
-    queryKey: bound.key(input) as DataTag<QueryKey, Success<T>, Error>,
+    queryKey: bound.key(captured) as DataTag<QueryKey, Success<T>, Error>,
     queryFn: async ({ signal }: QueryFunctionContext<QueryKey>) =>
-      unwrap(await bound.call(input, { signal })),
+      unwrap(await bound.call(captureInput(captured), { signal })),
   }
 }
 /** For loaders/prefetch: the caller explicitly awaits validation before creating canonical options. */

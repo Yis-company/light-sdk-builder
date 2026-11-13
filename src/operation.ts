@@ -9,7 +9,7 @@ export type OperationConfig<A, C, O> = {
 /** Transport-neutral execution. Callback return values and thrown errors pass through unchanged. */
 export function createOperation<A, C, O>(config: OperationConfig<A, C, O>) {
   const { resolve, execute: run } = config
-  const execute = (context: C, options: CallOptions = {}) => {
+  const execute = async (context: C, options: CallOptions = {}) => {
     options.signal?.throwIfAborted()
     return run(context, options)
   }

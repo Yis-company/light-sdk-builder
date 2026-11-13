@@ -82,29 +82,39 @@ export function unwrap<T extends HttpResult>(result: T): Success<T> {
   return result.data as Success<T>
 }
 
-// Cache/request snapshots accept JSON values, omit undefined object fields, and reject lossy non-JSON objects.
-function snapshot(value: unknown): unknown {
-  const json = JSON.stringify(value, function (_key, item: unknown) {
-    if (typeof item === 'bigint' || typeof item === 'function' || typeof item === 'symbol') {
-      throw new RequestError('Cache keys and JSON bodies must be JSON serializable')
+// Reject non-JSON values before serialization can invoke toJSON or discard data.
+// The raw query adapter captures this snapshot once, and copies it for each invocation.
+export function captureInput<I>(value: I): I {
+  const active = new WeakSet<object>()
+  const copy = (item: unknown, root = false): unknown => {
+    if (item === undefined && root) return undefined
+    if (item === null || typeof item === 'string' || typeof item === 'boolean') return item
+    if (typeof item === 'number' && Number.isFinite(item)) return item
+    if (!item || typeof item !== 'object') {
+      throw new RequestError('Use plain JSON inputs; omit undefined fields or use prepare()')
     }
-    if (typeof item === 'number' && !Number.isFinite(item))
-      throw new RequestError('Numbers must be finite')
-    if (item && typeof item === 'object') {
-      // JSON.stringify itself detects cycles. Avoid silently collapsing Maps/Sets/class instances.
-      if (
-        !Array.isArray(item) &&
-        Object.getPrototypeOf(item) !== Object.prototype &&
-        Object.getPrototypeOf(item) !== null
-      ) {
-        throw new RequestError('Use plain objects, arrays, or JSON primitives')
-      }
+    const array = Array.isArray(item)
+    if (
+      !array &&
+      Object.getPrototypeOf(item) !== Object.prototype &&
+      Object.getPrototypeOf(item) !== null
+    ) {
+      throw new RequestError('Use plain JSON objects; transform dates or use prepare()')
     }
-    return item
-  })
-  if (json === undefined) return undefined
-  return JSON.parse(json)
+    if (Object.getOwnPropertySymbols(item).length || active.has(item)) {
+      throw new RequestError('JSON inputs cannot contain symbols or cycles')
+    }
+    active.add(item)
+    const result = array
+      ? Array.from(item, (child) => copy(child))
+      : Object.fromEntries(Object.entries(item).map(([name, child]) => [name, copy(child)]))
+    active.delete(item)
+    return result
+  }
+  // Unsupported values throw above; copying supported JSON preserves the input type and values.
+  return copy(value, true) as I
 }
+
 function freeze(value: unknown): unknown {
   if (value && typeof value === 'object') {
     for (const child of Object.values(value)) freeze(child)
@@ -113,7 +123,7 @@ function freeze(value: unknown): unknown {
   return value
 }
 function key(...parts: unknown[]): CacheKey {
-  return Object.freeze(parts.map((part) => freeze(snapshot(part))))
+  return Object.freeze(parts.map((part) => freeze(captureInput(part))))
 }
 
 /** Scope headers and key context are captured together. Authentication headers never enter generated keys. */
@@ -203,7 +213,8 @@ export function endpoint<
           .join('/')
         const query = serializeQuery(request.query)
         const url = client.baseUrl + path + (query ? `?${query}` : '')
-        const body = request.body === undefined ? undefined : JSON.stringify(snapshot(request.body))
+        const body =
+          request.body === undefined ? undefined : JSON.stringify(captureInput(request.body))
         if ((method === 'GET' || method === 'HEAD') && body !== undefined)
           throw new RequestError(`${method} requests cannot have a body`)
         const headers = new Headers(client.headers.map((entry) => [entry[0], entry[1]]))
@@ -259,7 +270,7 @@ export function endpoint<
             method: method,
             baseUrl: client.baseUrl,
             path: template,
-            input,
+            input: input === undefined ? ['void'] : ['value', captureInput(input)],
           }),
         call: operation.call,
         prepare: async (input: Input<S>, options?: CallOptions) => {

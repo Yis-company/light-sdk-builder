@@ -322,3 +322,29 @@ test('endpoint definitions capture configuration before callers can mutate it', 
   assert.equal(f.requests[1].url, 'https://api.example/v1/original')
   assert.equal(bound.key({ body: { value: 2 } })[1], 'stable')
 })
+
+test('raw keys reject undefined fields and sparse values instead of silently aliasing JSON inputs', () => {
+  const bound = get.bind(fixture().client)
+  assert.throws(() => bound.key({ params: { id: 1 }, query: { active: undefined } }), RequestError)
+  assert.throws(() => bound.key({ params: { id: 1 }, query: { tags: [undefined] } }), RequestError)
+  const ping = endpoint({
+    name: 'ping',
+    method: 'GET',
+    path: '/ping',
+    responses: { 200: user },
+  }).bind(fixture().client)
+  assert.notDeepEqual(ping.key(undefined), ping.key(null))
+})
+
+test('prepared calls report cancellation as a rejected Promise', async () => {
+  const operation = createOperation({
+    resolve: async (value) => value,
+    execute: async (value) => value,
+  })
+  const prepared = await operation.prepare(1)
+  let pending
+  assert.doesNotThrow(() => {
+    pending = prepared.call({ signal: AbortSignal.abort() })
+  })
+  await assert.rejects(pending, (error) => error.name === 'AbortError')
+})
