@@ -157,7 +157,9 @@ export function createClient(options: ClientOptions): Client {
 
 export function serializeQuery(query: Query = {}): string {
   const params = new URLSearchParams()
-  for (const [name, value] of Object.entries(query).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [name, value] of Object.entries(query).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )) {
     for (const item of Array.isArray(value) ? value : [value]) {
       if (item === null || item === undefined) continue
       if (!['string', 'number', 'boolean'].includes(typeof item))
@@ -208,6 +210,7 @@ export function endpoint<
             const value = request.params?.[segment.slice(1)]
             if (
               value === undefined ||
+              value === '' ||
               (typeof value === 'number' && !Number.isFinite(value)) ||
               value === '.' ||
               value === '..'
@@ -244,7 +247,8 @@ export function endpoint<
           const init: RequestInit = { method: method, headers: new Headers(request.headers) }
           if (request.body !== undefined) init.body = request.body
           if (options.signal !== undefined) init.signal = options.signal
-          const response = await client.fetch(request.url, init)
+          const fetch = client.fetch
+          const response = await fetch(request.url, init)
           const schema = responses[response.status]
           if (!schema) {
             const text = await response.text()
@@ -261,7 +265,11 @@ export function endpoint<
             try {
               payload = await response.json()
             } catch (cause) {
-              throw new ResponseDecodeError('Expected a JSON response', { cause })
+              options.signal?.throwIfAborted()
+              if (cause instanceof SyntaxError) {
+                throw new ResponseDecodeError('Expected a JSON response', { cause })
+              }
+              throw cause
             }
           }
           const data = await validateSchema(schema, payload, 'response')

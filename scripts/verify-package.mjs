@@ -12,7 +12,10 @@ function run(command, args, cwd) {
   return result.stdout
 }
 await mkdir(join(root, 'artifacts'), { recursive: true })
-const [packed] = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', 'artifacts'], root))
+const packResult = JSON.parse(
+  run('npm', ['pack', '--json', '--pack-destination', 'artifacts'], root),
+)
+const [packed] = Array.isArray(packResult) ? packResult : Object.values(packResult)
 const tarball = resolve(root, 'artifacts', packed.filename)
 assert(packed.files.some((file) => file.path === 'dist/index.js'))
 assert(packed.files.some((file) => file.path === 'dist/index.d.ts'))

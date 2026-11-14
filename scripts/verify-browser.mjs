@@ -24,24 +24,48 @@ await writeFile(
 )
 const browser = await chromium.launch({ headless: true })
 try {
-  const page = await browser.newPage()
-  const errors = [],
-    network = []
-  page.on('pageerror', (error) => errors.push(error.message))
-  page.on('request', (request) => {
-    if (/^https?:/.test(request.url())) network.push(request.url())
-  })
-  await page.goto(pathToFileURL(join(fixture, 'browser.html')).href)
-  const result = await page.evaluate(() => window.sdkSmoke)
-  assert.deepEqual(result.value, { status: 200, ok: true, data: { name: 'Ada' } })
-  assert.equal(result.requests.length, 2)
-  assert.equal(result.requests[0].url, 'https://fixture.invalid/api/users/a%2Fb')
-  assert(result.requests.every((request) => request.workspace === '7'))
-  assert.equal(result.cancelled, true)
-  assert.deepEqual(errors, [])
-  assert.deepEqual(network, [])
+  const localeKeys = []
+  for (const locale of ['en-US', 'cs-CZ']) {
+    const context = await browser.newContext({ locale })
+    try {
+      const page = await context.newPage()
+      const errors = [],
+        network = []
+      page.on('pageerror', (error) => errors.push(error.message))
+      page.on('request', (request) => {
+        if (/^https?:/.test(request.url())) network.push(request.url())
+      })
+      // Intercept every HTTP request: exercise native fetch without contacting a live API.
+      await page.route(/^https?:/, (route) =>
+        route.fulfill({
+          contentType: 'application/json',
+          headers: { 'access-control-allow-origin': '*' },
+          body: JSON.stringify({ name: 'Ada' }),
+        }),
+      )
+      await page.goto(pathToFileURL(join(fixture, 'browser.html')).href)
+      const result = await page.evaluate(() => window.sdkSmoke)
+      const expected = { status: 200, ok: true, data: { name: 'Ada' } }
+      assert.deepEqual(result.value, expected)
+      assert.deepEqual(result.nativeDefault, expected)
+      assert.deepEqual(result.nativeInjected, expected)
+      assert.equal(result.requests.length, 2)
+      assert.equal(result.requests[0].url, 'https://fixture.invalid/api/users/a%2Fb')
+      assert(result.requests.every((request) => request.workspace === '7'))
+      assert.equal(result.cancelled, true)
+      assert.deepEqual(errors, [])
+      assert.deepEqual(network, [
+        'https://fixture.invalid/api/native',
+        'https://fixture.invalid/api/native',
+      ])
+      localeKeys.push(result.localeKey)
+    } finally {
+      await context.close()
+    }
+  }
+  assert.deepEqual(localeKeys[0], localeKeys[1], 'Prepared keys must match across browser locales')
   console.log(
-    'Installed core passed actual browser requests, scoped headers, encoding, preparation, and cancellation without TanStack or live HTTP',
+    'Installed core passed native/default fetch, cross-locale keys, scoped requests and cancellation without TanStack or live HTTP',
   )
 } finally {
   await browser.close()

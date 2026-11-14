@@ -64,6 +64,39 @@ test('raw keys remain synchronous; prepared keys canonicalize transformed input'
   assert.deepEqual((await bound.prepare(a)).key, (await bound.prepare(b)).key)
 })
 
+test('canonical query URLs use code-unit order regardless of input insertion order', async () => {
+  const f = fixture()
+  const bound = endpoint({
+    name: 'users.query',
+    method: 'GET',
+    path: '/users',
+    input: z.object({ query: z.record(z.string(), z.string()) }),
+    responses: { 200: user },
+  }).bind(f.client)
+  const first = await bound.prepare({ query: { a: '1', B: '2', ch: '3', h: '4' } })
+  const second = await bound.prepare({ query: { h: '4', ch: '3', B: '2', a: '1' } })
+  assert.deepEqual(first.key, second.key)
+  await first.call()
+  assert.equal(f.requests[0].url, 'https://api.example/v1/users?B=2&a=1&ch=3&h=4')
+})
+
+test('empty path parameters stop before HTTP while zero remains a valid item ID', async () => {
+  const f = fixture()
+  const remove = endpoint({
+    name: 'users.remove',
+    method: 'DELETE',
+    path: '/users/:id',
+    input,
+    responses: { 200: user },
+  }).bind(f.client)
+  for (const id of ['', '   ']) {
+    await assert.rejects(remove.call({ params: { id } }), RequestError)
+  }
+  assert.equal(f.requests.length, 0)
+  await remove.call({ params: { id: 0 } })
+  assert.equal(f.requests[0].url, 'https://api.example/v1/users/0')
+})
+
 test('captured headers, scope, body and keys cannot drift after preparation', async () => {
   const scope = { key: [{ workspace: 7 }], headers: { 'X-Workspace': '7' } }
   const headers = { Authorization: 'Bearer fixture-secret' }
@@ -164,6 +197,37 @@ test('malformed successful JSON reports a decode error', async () => {
   })
   await assert.rejects(get.bind(f).call({ params: { id: 1 } }), ResponseDecodeError)
 })
+
+for (const [kind, abort, reason] of [
+  ['network failure', false, new TypeError('Body connection dropped')],
+  ['default abort', true, undefined],
+  ['custom abort', true, new SyntaxError('Caller cancellation reason')],
+]) {
+  test(`body-read ${kind} preserves the original error`, async () => {
+    const reading = Promise.withResolvers()
+    let body
+    const stream = new ReadableStream(
+      {
+        start(controller) {
+          body = controller
+        },
+        pull() {
+          reading.resolve()
+        },
+      },
+      { highWaterMark: 0 },
+    )
+    const response = new Response(stream)
+    const client = createClient({ baseUrl: 'https://api.example', fetch: async () => response })
+    const controller = new AbortController()
+    const pending = get.bind(client).call({ params: { id: 1 } }, { signal: controller.signal })
+    await reading.promise
+    if (abort) controller.abort(reason)
+    const failure = abort ? controller.signal.reason : reason
+    body.error(failure)
+    await assert.rejects(pending, (error) => error === failure)
+  })
+}
 
 test('bodyless endpoints support omitted input and empty 204 responses', async () => {
   const remove = endpoint({

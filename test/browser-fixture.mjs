@@ -32,5 +32,18 @@ window.sdkSmoke = (async () => {
   } catch (error) {
     cancelled = error.name === 'AbortError'
   }
-  return { value, requests, cancelled, key: prepared.key }
+  const nativeEndpoint = endpoint({
+    name: 'native-fetch',
+    method: 'GET',
+    path: '/native',
+    responses: { 200: schema },
+  })
+  const nativeDefault = await nativeEndpoint
+    .bind(createClient({ baseUrl: 'https://fixture.invalid/api' }))
+    .call()
+  const nativeInjected = await nativeEndpoint
+    .bind(createClient({ baseUrl: 'https://fixture.invalid/api', fetch: globalThis.fetch }))
+    .call()
+  const localeKey = (await read.prepare({ params: { id: 'a/b' }, query: { ch: 1, h: 2 } })).key
+  return { value, requests, cancelled, key: prepared.key, nativeDefault, nativeInjected, localeKey }
 })()
