@@ -3,3 +3,8 @@ dist/
 artifacts/
 .tmp/
 *.tsbuildinfo
+
+# Local planning and review artifacts
+/.codex/plans/
+/.claude/plans/
+/.agents/plans/
