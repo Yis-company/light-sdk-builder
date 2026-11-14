@@ -9,14 +9,14 @@ import type {
 } from '@tanstack/query-core'
 import {
   unwrap,
+  captureInput,
   type CacheKey,
   type Callable,
   type CallOptions,
   type HttpResult,
   type Queryable,
   type Success,
-} from './index.js'
-import { captureInput } from './endpoint.js'
+} from 'light-sdk-builder'
 
 export type QueryOverrides<T, Selected> = Omit<
   QueryObserverOptions<T, Error, Selected, T, QueryKey>,

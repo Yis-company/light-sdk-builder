@@ -2,6 +2,7 @@ export { createOperation, validateSchema, ValidationError } from './operation.js
 export type { CallOptions, OperationConfig } from './operation.js'
 export {
   endpoint,
+  captureInput,
   createClient,
   serializeQuery,
   unwrap,

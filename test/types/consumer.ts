@@ -7,13 +7,13 @@ import {
   createOperation,
   validateSchema,
   type StandardSchemaV1,
-} from '../../dist/index.js'
+} from 'light-sdk-builder'
 import {
   queryOptions,
   preparedQueryOptions,
   mutationOptions,
   infiniteQueryOptions,
-} from '../../dist/tanstack-query.js'
+} from 'light-sdk-builder-tanstack-query'
 const user = z.object({ name: z.string() })
 const read = endpoint({
   name: 'users.get',

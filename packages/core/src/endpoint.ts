@@ -82,8 +82,7 @@ export function unwrap<T extends HttpResult>(result: T): Success<T> {
   return result.data as Success<T>
 }
 
-// Reject non-JSON values before serialization can invoke toJSON or discard data.
-// The raw query adapter captures this snapshot once, and copies it for each invocation.
+/** Copy plain JSON input without invoking toJSON. Root undefined is allowed; unsupported values throw RequestError. */
 export function captureInput<I>(value: I): I {
   const active = new WeakSet<object>()
   const copy = (item: unknown, root = false): unknown => {

@@ -8,3 +8,5 @@ artifacts/
 /.codex/plans/
 /.claude/plans/
 /.agents/plans/
+
+.turbo/

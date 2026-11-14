@@ -1,63 +1,41 @@
 {
-  "name": "light-sdk-builder",
-  "version": "0.1.0",
-  "description": "Schema-neutral SDK authoring for existing HTTP APIs, with optional TanStack Query integration.",
+  "name": "light-sdk-builder-workspace",
+  "private": true,
   "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Yis-company/light-sdk-builder.git"
-  },
-  "files": [
-    "dist",
-    "LICENSE",
-    "NOTICE",
-    "README.md"
+  "workspaces": [
+    "packages/*"
   ],
   "type": "module",
-  "sideEffects": false,
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./tanstack-query": {
-      "types": "./dist/tanstack-query.d.ts",
-      "import": "./dist/tanstack-query.js"
-    }
-  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "check": "turbo run build test typecheck typecheck:minimum",
     "typecheck": "tsc -p test/types/tsconfig.json",
     "typecheck:minimum": "node node_modules/typescript-minimum/bin/tsc -p test/types/tsconfig.json",
-    "test": "node --test test/*.test.mjs",
-    "test:package": "node scripts/verify-package.mjs",
-    "prepack": "npm run build",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "test:browser": "node scripts/verify-browser.mjs"
-  },
-  "dependencies": {
-    "@standard-schema/spec": "^1.1.0"
+    "test:package": "node scripts/verify-package.mjs",
+    "test:browser": "node scripts/verify-browser.mjs",
+    "changeset": "changeset",
+    "version-packages": "changeset version && bun install --lockfile-only --ignore-scripts",
+    "release:pack": "changeset pack --out-dir artifacts/release",
+    "release:check": "node scripts/verify-package.mjs --pack-dir artifacts/release"
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@tanstack/query-core": "5.105.0",
     "@tanstack/react-query": "5.105.0",
     "@types/react": "19.3.0",
+    "light-sdk-builder": "workspace:*",
+    "light-sdk-builder-tanstack-query": "workspace:*",
     "oxfmt": "0.75.0",
     "playwright": "1.64.1",
     "react": "19.3.1",
+    "turbo": "2.11.11",
     "typescript": "7.0.2",
     "typescript-minimum": "npm:typescript@5.5.4",
     "valibot": "1.5.0",
     "zod": "4.6.7"
-  },
-  "peerDependencies": {
-    "@tanstack/query-core": "^5.105.0"
-  },
-  "peerDependenciesMeta": {
-    "@tanstack/query-core": {
-      "optional": true
-    }
   },
   "engines": {
     "node": ">=22"

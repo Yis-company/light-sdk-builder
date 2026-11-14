@@ -2,13 +2,13 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { QueryClient, QueryObserver, InfiniteQueryObserver } from '@tanstack/query-core'
 import { z } from 'zod'
-import { createClient, endpoint, HttpError } from '../dist/index.js'
+import { createClient, endpoint, HttpError } from 'light-sdk-builder'
 import {
   queryOptions,
   preparedQueryOptions,
   mutationOptions,
   infiniteQueryOptions,
-} from '../dist/tanstack-query.js'
+} from '../dist/index.js'
 const result = z.object({ name: z.string() })
 const input = z.object({
   params: z.object({ id: z.union([z.string(), z.number()]).transform((id) => String(id).trim()) }),
