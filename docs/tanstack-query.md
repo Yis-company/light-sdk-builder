@@ -83,17 +83,36 @@ const options = infiniteQueryOptions({
 
 Here `sdk.users.list` is an endpoint you define with a response containing `nextOffset`. Return `null` or `undefined` when there are no further pages. Finite and infinite keys are separated to avoid incompatible cached data.
 
-## Add helpers to an existing core SDK
+## Register once at SDK initialization
 
-`withTanStack(coreSdk)` returns a facade with `queryOptions` and `mutationOptions` on procedure descriptors. Existing plain `query`/`mutate` methods remain available. Core endpoint bindings also gain query/mutation helpers. Infinite procedures already expose their explicit page/options contract. Apply the adapter once when constructing the SDK; React hooks remain normal TanStack hooks.
+Route factories import core only. Enable the plugin in the consuming application:
 
 ```ts
-import { withTanStack, bindAuthToQueryClient } from 'light-sdk-builder-tanstack-query'
+import { createSdk } from 'light-sdk-builder'
+import { tanstackQuery, bindAuthToQueryClient } from 'light-sdk-builder-tanstack-query'
 
-const api = withTanStack(coreSdk)
+const api = createSdk({ routes, transport, plugins: [tanstackQuery()] })
 // useQuery(api.users.queryOptions({ input: { search: 'Ada' } }))
 const disconnect = bindAuthToQueryClient(queryClient, authBridge)
-// Call disconnect when the integration owner unmounts/disposes.
 ```
 
-The optional auth binding cancels/removes query data on logical session changes. Credential revision changes preserve cache. Use one bridge per server request and a fresh QueryClient per server request. Mutation side effects, persisted caches and raw streams remain application-owned.
+Query, mutation and infinite-query helpers are added to the SDK; direct methods remain available. Backend initialization omits plugins and returns only the core features. `withTanStack` remains a compatibility helper for older beta consumers; new applications register `tanstackQuery()` instead of wrapping routes.
+
+## React setup
+
+```ts
+import {
+  createTanStackHook,
+  useQuery,
+  QueryClient,
+  QueryClientProvider,
+} from 'light-sdk-builder-tanstack-query/react'
+
+export const useApi = createTanStackHook(useTransport, routes)
+// Inside a component under QueryClientProvider:
+// const query = useQuery(useApi().users.queryOptions({ input: { search: 'Ada' } }))
+```
+
+The hook shares one SDK per transport and registers TanStack automatically. `createSdkHook` and `createSdkContext` are also exported for custom application composition. Pass your QueryClient to `QueryClientProvider`; its cache defaults and invalidation policy remain yours. The optional React entry requires React, React Query and `light-sdk-builder-react`, and loads no auth package. Query Core usage through the main entry needs none of these React dependencies.
+
+The optional auth binding cancels/removes query data on logical session changes. Credential revision changes preserve cache. Disconnect on disposal. Server auth bridges and QueryClients remain request-local. Mutation side effects, persisted caches and raw streams remain application-owned. See [SDK plugins](plugins.md).

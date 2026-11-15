@@ -1,6 +1,6 @@
 {
   "name": "light-sdk-builder-react",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Optional React bindings for light-sdk-builder.",
   "license": "Apache-2.0",
   "repository": {
@@ -20,6 +20,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "import": "./dist/context.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
     }
   },
   "publishConfig": {
@@ -35,6 +43,11 @@
   "peerDependencies": {
     "light-sdk-builder-auth": "^0.1.0-beta.0",
     "react": "^19.3.1"
+  },
+  "peerDependenciesMeta": {
+    "light-sdk-builder-auth": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22"

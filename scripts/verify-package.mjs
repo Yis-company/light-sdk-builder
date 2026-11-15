@@ -83,11 +83,14 @@ for (const { manifest: local } of packages) {
 const fixture = await mkdtemp(join(tmpdir(), 'light-sdk-builder-package-'))
 const coreSmoke = `
 import assert from 'node:assert/strict'
-import { endpoint, createClient } from 'light-sdk-builder'
+import { endpoint, createClient, createSdk } from 'light-sdk-builder'
 const schema = { '~standard': { version: 1, vendor: 'fixture', validate: value => ({ value }) } }
 const api = endpoint({ name: 'ping', method: 'GET', path: '/ping', responses: { 200: schema } })
 const result = await api.bind(createClient({ baseUrl: 'https://fixture.invalid', fetch: async () => Response.json({ ready: true }) })).call()
 assert.equal(result.data.ready, true)
+const sdk = createSdk({ routes: client => ({ ping: api.bind(client) }), transport: createClient({ baseUrl: 'https://fixture.invalid', fetch: async () => Response.json({ ready: true }) }) })
+assert.equal((await sdk.ping.call()).data.ready, true)
+assert.equal('queryOptions' in sdk.ping, false)
 `
 const adapterSmoke = `
 import assert from 'node:assert/strict'
@@ -158,7 +161,7 @@ assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPat
       run(process.execPath, ['--experimental-import-meta-resolve', 'resolve-core.mjs'], cwd)
       await writeFile(join(cwd, 'consumer.ts'), types)
       await writeFile(join(cwd, 'quickstart.ts'), quickstart)
-      for (const name of ['auth.ts', 'procedures.ts'])
+      for (const name of ['auth.ts', 'procedures.ts', 'sdk.ts'])
         await writeFile(join(cwd, name), await readFile(join(root, 'test/types', name)))
       await writeFile(
         join(cwd, 'tsconfig.json'),
@@ -186,6 +189,73 @@ assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPat
       `${manager}: ${adapter ? 'adapter types, QueryClient, one core and HttpError identity' : 'core without TanStack/React'} passed`,
     )
   }
+}
+for (const manager of ['npm', 'bun']) {
+  const cwd = join(fixture, manager + '-query-core')
+  await mkdir(cwd)
+  await writeFile(
+    join(cwd, 'package.json'),
+    JSON.stringify({
+      name: 'sdk-query-core-fixture',
+      private: true,
+      type: 'module',
+      dependencies: {
+        'light-sdk-builder': dependencies['light-sdk-builder'],
+        'light-sdk-builder-tanstack-query': dependencies['light-sdk-builder-tanstack-query'],
+        '@tanstack/query-core': '5.105.0',
+      },
+    }),
+  )
+  run(
+    manager,
+    manager === 'npm'
+      ? ['install', '--ignore-scripts', '--no-audit', '--no-fund']
+      : ['install', '--ignore-scripts'],
+    cwd,
+  )
+  for (const optional of ['react', 'light-sdk-builder-react', 'light-sdk-builder-auth'])
+    await assert.rejects(access(join(cwd, 'node_modules', optional)))
+  await writeFile(
+    join(cwd, 'query.mjs'),
+    await readFile(join(root, 'test/query-core-plugin-fixture.mjs')),
+  )
+  run(manager === 'npm' ? process.execPath : 'bun', ['query.mjs'], cwd)
+  console.log(`${manager}: TanStack plugin with Query Core alone passed`)
+}
+for (const manager of ['npm', 'bun']) {
+  const cwd = join(fixture, manager + '-react')
+  await mkdir(cwd)
+  await writeFile(
+    join(cwd, 'package.json'),
+    JSON.stringify({
+      name: 'sdk-react-fixture',
+      private: true,
+      type: 'module',
+      dependencies: {
+        'light-sdk-builder': dependencies['light-sdk-builder'],
+        'light-sdk-builder-react': dependencies['light-sdk-builder-react'],
+        'light-sdk-builder-tanstack-query': dependencies['light-sdk-builder-tanstack-query'],
+        '@tanstack/query-core': '5.105.0',
+        '@tanstack/react-query': '5.105.0',
+        react: '19.3.1',
+        'react-dom': '19.3.1',
+      },
+    }),
+  )
+  run(
+    manager,
+    manager === 'npm'
+      ? ['install', '--ignore-scripts', '--no-audit', '--no-fund']
+      : ['install', '--ignore-scripts'],
+    cwd,
+  )
+  await assert.rejects(access(join(cwd, 'node_modules/light-sdk-builder-auth')))
+  await writeFile(
+    join(cwd, 'react.mjs'),
+    await readFile(join(root, 'test/react-plugin-fixture.mjs')),
+  )
+  run(manager === 'npm' ? process.execPath : 'bun', ['react.mjs'], cwd)
+  console.log(`${manager}: configured TanStack React hook/provider without auth passed`)
 }
 const report = {
   archives: Object.fromEntries(packed),

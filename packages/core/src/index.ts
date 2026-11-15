@@ -55,3 +55,5 @@ export type {
   TransportScope,
   FetcherOptions,
 } from './transport.js'
+export { createSdk, defineSdkPlugin } from './sdk.js'
+export type { SdkPlugin, SdkPlugins, ApplySdkPlugins } from './sdk.js'

@@ -11,6 +11,10 @@ import type {
 import {
   unwrap,
   captureInput,
+  defineSdkPlugin,
+  procedureDefinition,
+  type SdkPlugin,
+  type ProcedureDefinition,
   type CacheKey,
   type Callable,
   type CallOptions,
@@ -121,8 +125,6 @@ export function infiniteQueryOptions<T extends HttpResult, Page>(
   }
 }
 
-import { procedureDefinition, type ProcedureDefinition } from 'light-sdk-builder'
-
 type ProcedureQueryOptions<A, O> = [A] extends [void]
   ? <Selected = O>(options?: QueryOverrides<O, Selected>) => BuiltQueryOptions<O, Selected>
   : <Selected = O>(args: A, options?: QueryOverrides<O, Selected>) => BuiltQueryOptions<O, Selected>
@@ -190,14 +192,14 @@ type EndpointOptions<I, R extends HttpResult> = {
   }
 }
 
-/** Add options to a core-authored router without introducing TanStack into its authoring package. */
+/** @deprecated Register tanstackQuery() in createSdk; retained for earlier beta consumers. */
 export type WithTanStack<T> = T extends {
   [procedureDefinition]: ProcedureDefinition<infer Kind, infer A, infer O, infer V, infer P>
 }
   ? Kind extends 'mutation'
     ? Omit<T, typeof procedureDefinition> & { mutationOptions: ProcedureMutationOptions<P, V, O> }
     : Kind extends 'infinite'
-      ? Omit<T, typeof procedureDefinition | 'queryPage'> & {
+      ? Omit<T, typeof procedureDefinition> & {
           queryOptions: ProcedurePageOptions<A, O>
         }
       : Omit<T, typeof procedureDefinition> & { queryOptions: ProcedureQueryOptions<A, O> }
@@ -237,7 +239,7 @@ export function withTanStack<T>(router: T): WithTanStack<T> {
         },
       } as WithTanStack<T>
     }
-    const { queryPage: _page, ...methods } = router as Record<string, unknown>
+    const methods = router as Record<string, unknown>
     return {
       ...methods,
       queryOptions: (first?: unknown, second?: Record<string, unknown>) => {
@@ -310,4 +312,12 @@ export function bindAuthToQueryClient(
     void queryClient.cancelQueries()
     queryClient.removeQueries()
   })
+}
+
+export interface TanStackQueryPlugin extends SdkPlugin {
+  readonly output: WithTanStack<this['input']>
+}
+/** Enable TanStack once at SDK initialization, independently from route authoring. */
+export function tanstackQuery(): TanStackQueryPlugin {
+  return defineSdkPlugin<TanStackQueryPlugin>(withTanStack)
 }

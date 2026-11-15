@@ -1,6 +1,6 @@
 # Beta releases
 
-The repository root is private. Core, auth, React bindings and TanStack Query are public packages with independent versions. Core/TanStack are **`0.1.0-beta.1`**; the new auth/React packages start at **`0.1.0-beta.0`**; no `1.0` release or npm publication is authorized by this setup.
+The repository root is private. Core, auth, React bindings and TanStack Query are public packages with independent versions. Core/TanStack are **`0.1.0-beta.2`**, React is **`0.1.0-beta.1`**, and auth is **`0.1.0-beta.0`**; no `1.0` release or npm publication is authorized by this setup.
 
 ## Recording changes
 

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { QueryClient } from '@tanstack/query-core'
 import { z } from 'zod'
-import { createProcedure, createTransport, scopeTransport } from 'light-sdk-builder'
-import { withTanStack } from '../dist/index.js'
+import { createSdk, createProcedure, createTransport, scopeTransport } from 'light-sdk-builder'
+import { tanstackQuery, withTanStack } from '../dist/index.js'
 
 function setup() {
   const calls = []
@@ -36,10 +36,14 @@ function setup() {
       (page) => (page.page < 2 ? page.page + 1 : undefined),
     ),
   }
-  return { core, api: withTanStack(core), calls }
+  return {
+    core,
+    api: createSdk({ routes: () => core, transport: request, plugins: [tanstackQuery()] }),
+    calls,
+  }
 }
 
-test('a consumer adds TanStack after the core SDK is authored', async () => {
+test('one SDK plugin registration enriches every agnostic procedure and retains plain methods', async () => {
   const { core, api } = setup()
   assert.equal('queryOptions' in core.get, false)
   assert.deepEqual(
@@ -48,7 +52,7 @@ test('a consumer adds TanStack after the core SDK is authored', async () => {
   )
   assert.deepEqual(
     Object.keys(api.pages).sort(),
-    ['allScopesKey', 'queryKey', 'queryOptions'].sort(),
+    ['allScopesKey', 'queryKey', 'queryOptions', 'queryPage'].sort(),
   )
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })
   try {

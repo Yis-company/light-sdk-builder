@@ -26,7 +26,9 @@ Supports Node 22+, Bun, browsers with Fetch/AbortController, and TypeScript 5.5+
 
 For callback-based APIs, `createProcedure(createTransport(fetch))` supplies typed path/input builders, scope policies and plain async methods. Inject an auth bridge fetch function to connect existing auth logic.
 
-Exports include `createProcedure`, `createTransport`, `scopeTransport`, `endpoint`, `createClient`, `createOperation`, `validateSchema`, `serializeQuery`, `captureInput`, `unwrap`, error classes, and their public types. `captureInput` copies plain JSON inputs and rejects values whose JSON representation would lose information; adapters can use it to preserve request snapshots.
+Initialize with `createSdk({ routes, transport })`. Optional plugins register at initialization; routes stay framework-neutral.
+
+Exports include `createSdk`, `defineSdkPlugin`, `createProcedure`, `createTransport`, `scopeTransport`, `endpoint`, `createClient`, `createOperation`, `validateSchema`, `serializeQuery`, `captureInput`, `unwrap`, error classes, and their public types. `captureInput` copies plain JSON inputs and rejects values whose JSON representation would lose information; adapters can use it to preserve request snapshots.
 
 - [Getting started and API behavior](https://github.com/Yis-company/light-sdk-builder/blob/main/docs/getting-started.md)
 - [Optional TanStack Query package](https://github.com/Yis-company/light-sdk-builder/blob/main/docs/tanstack-query.md)
