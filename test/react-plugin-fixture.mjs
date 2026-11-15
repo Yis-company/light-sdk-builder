@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
-import { createProcedure, createSdk, createHttpTransport } from 'light-sdk-builder'
+import { createSdkBuilder } from 'light-sdk-builder'
 import { createSdkContext } from 'light-sdk-builder-react/context'
 import {
   createUseTanStackSdk,
@@ -9,23 +9,25 @@ import {
   QueryClientProvider,
 } from 'light-sdk-builder-tanstack-query/react'
 
-const transport = createHttpTransport(async () => Response.json({ ready: true }))
+const builder = createSdkBuilder()
+const http = async () => Response.json({ ready: true })
 let builds = 0
-const routes = (client) => {
-  builds++
-  return {
-    ping: createProcedure(client)
-      .path('ping')
-      .query(async ({ path, http, signal }) =>
-        (await http(new URL(path, 'https://fixture.invalid'), { signal })).json(),
-      ),
-  }
+const routes = {
+  ping: builder.procedure
+    .path('ping')
+    .query(async ({ path, http, signal }) =>
+      (await http(new URL(path, 'https://fixture.invalid'), { signal })).json(),
+    ),
 }
-const backend = createSdk({ routes, transport })
+const initialize = (http) => {
+  builds++
+  return builder.create({ http, routes })
+}
+const backend = initialize(http)
 assert.equal('queryOptions' in backend.ping, false)
 assert.deepEqual(await backend.ping.query(), { ready: true })
 const context = createSdkContext()
-const useApi = createUseTanStackSdk(context.useSdk, routes)
+const useApi = createUseTanStackSdk(context.useSdk, initialize)
 const observed = []
 function Screen() {
   observed.push(useApi())
@@ -37,12 +39,7 @@ try {
     createElement(
       QueryClientProvider,
       { client },
-      createElement(
-        context.Provider,
-        { sdk: transport },
-        createElement(Screen),
-        createElement(Screen),
-      ),
+      createElement(context.Provider, { sdk: http }, createElement(Screen), createElement(Screen)),
     ),
   )
   assert.equal(observed[0], observed[1])

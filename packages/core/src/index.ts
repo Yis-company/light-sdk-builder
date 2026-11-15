@@ -41,3 +41,13 @@ export { createHttpTransport } from './transport.js'
 export type { HttpTransport, HttpTransportOptions } from './transport.js'
 export { createSdk, defineSdkPlugin } from './sdk.js'
 export type { SdkPlugin, SdkPlugins, ApplySdkPlugins } from './sdk.js'
+
+export { createSdkBuilder } from './sdk-builder.js'
+export type {
+  SdkBuilder,
+  SdkCreateOptions,
+  SdkBuilderOptions,
+  ProcedureRoutes,
+  BoundRoutes,
+} from './sdk-builder.js'
+export type { ProcedureTemplate, ProcedureFactory } from './procedure.js'

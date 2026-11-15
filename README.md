@@ -3,7 +3,7 @@
 Build a small typed SDK for an existing API, whatever language its backend uses.
 Define HTTP contracts once, validate with any Standard Schema v1 validator, and call them with plain async functions. Add TanStack Query when your application needs it.
 
-This Bun/Turborepo monorepo contains four ESM packages:
+This Bun/Turborepo monorepo contains five ESM packages:
 
 | Package                                                       | Purpose                                                                                   |
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -11,10 +11,11 @@ This Bun/Turborepo monorepo contains four ESM packages:
 | [`light-sdk-builder-tanstack-query`](packages/tanstack-query) | Query, mutation, and infinite-query options for TanStack Query v5                         |
 | [`light-sdk-builder-auth`](packages/auth)                     | User-owned auth sources, recovery and session isolation                                   |
 | [`light-sdk-builder-react`](packages/react)                   | SDK context and React bindings for auth sources                                           |
+| [`eslint-plugin-light-sdk-builder`](packages/eslint-plugin)   | Opt-in lint rules for reusable route authoring                                            |
 
 Connect authentication once through an application-owned source. React bindings and TanStack Query are optional. See [Auth integration](docs/auth.md).
 
-Core/TanStack are **`0.1.0-beta.3`**, React is **`0.1.0-beta.2`**, and auth is **`0.1.0-beta.0`**. Publication is pending; the API may change during beta. Supports Node 22+, Bun, browsers with Fetch/AbortController, and TypeScript 5.5+. Core requires neither React, up-fetch nor a validator implementation. Procedure callbacks accept native fetch, up-fetch or a custom HTTP client without changing the client's types or errors.
+Core/TanStack are **`0.1.0-beta.4`**, React is **`0.1.0-beta.2`**, auth is **`0.1.0-beta.0`**, and the lint plugin is **`0.1.0-beta.0`**. Publication is pending; the API may change during beta. Supports Node 22+, Bun, browsers with Fetch/AbortController, and TypeScript 5.5+. Core requires neither React, up-fetch nor a validator implementation. Procedure callbacks accept native fetch, up-fetch or a custom HTTP client without changing the client's types or errors.
 
 ## Quickstart
 
@@ -49,10 +50,12 @@ Zod is one option. Valibot and custom synchronous or asynchronous Standard Schem
 
 ## SDK composition
 
-Keep route factories in core. `createSdk({ routes, transport })` gives plain calls; `createSdk({ routes, transport, plugins: [tanstackQuery()] })` enables TanStack once in the consuming application. The optional TanStack `/react` entry supplies a configured SDK hook, query hooks and provider exports. [Plugin setup](docs/plugins.md).
+Declare `createSdkBuilder<Http>()` once and export routes built with `sdk.procedure`. Bind a runtime client with `sdk.create({ http, routes })`; add `plugins: [tanstackQuery()]` when needed. Shared definitions hold no client and work across independent SDK instances. [Reusable procedure authoring](docs/reusable-procedures.md). Existing bound procedures and route factories remain supported. The optional TanStack `/react` entry supplies a configured SDK hook, query hooks and provider exports. [Plugin setup](docs/plugins.md).
 
 ## Documentation
 
+- [Reusable procedures](docs/reusable-procedures.md): define routes once and bind clients per SDK instance.
+- [Opt-in lint and agent skill](docs/lint.md): ESLint/Oxlint setup and a repository-distributed authoring skill.
 - [Getting started](docs/getting-started.md): contracts, validation, errors, cancellation, and existing SDK integration.
 - [TanStack Query](docs/tanstack-query.md): installation, hooks, prepared keys, pagination, and import migration.
 - [Releases](docs/releases.md): Changesets, beta versions, artifact checks, and publication gates.

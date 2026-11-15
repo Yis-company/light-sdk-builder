@@ -85,6 +85,8 @@ Here `sdk.users.list` is an endpoint you define with a response containing `next
 
 ## Register once at SDK initialization
 
+With reusable definitions, use `sdk.create({ http, routes, plugins: [tanstackQuery()] })`. Definitions import only the configured core procedure helper; binding and adapter setup happen once per SDK instance. See [reusable procedures](reusable-procedures.md). Existing route factories remain supported:
+
 Route factories import core only. Enable the plugin in the consuming application:
 
 ```ts

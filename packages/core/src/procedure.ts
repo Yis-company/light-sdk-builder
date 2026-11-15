@@ -12,7 +12,19 @@ type Args<P, I> = ([P] extends [undefined] ? {} : { path: In<P> }) &
 type CallArgs<P, I> = [P, I] extends [undefined, undefined] ? void : Args<P, I>
 type PathArgs<P> = P extends Schema ? { path: In<P> } : void
 export type ProcedureContext<Http = unknown> = { path: string; http: Http; signal?: AbortSignal }
-export type ProcedureOptions = { keyContext?: () => CacheKey }
+export type ProcedureOptions<Http = unknown> = {
+  keyContext?: (context: { http: Http }) => CacheKey
+}
+export const procedureTemplate: unique symbol = Symbol('light-sdk-builder.procedure-template')
+export type ProcedureTemplate<Http, Bound> = {
+  readonly [procedureTemplate]: (
+    transport: HttpTransport<Http>,
+    options: ProcedureOptions<Http>,
+  ) => Bound
+}
+type Finished<Http, Bound, Deferred extends boolean> = Deferred extends true
+  ? ProcedureTemplate<Http, Bound>
+  : Bound
 type Merge<Base, Extra> = Omit<Base, keyof Extra> & Extra
 export const procedureDefinition: unique symbol = Symbol('light-sdk-builder.procedure')
 
@@ -49,27 +61,44 @@ export type InfiniteProcedure<A, O> = {
 
 type InputContext<I> = [I] extends [undefined] ? {} : { input: Out<I> }
 type Context<Http, I, Extra> = Merge<ProcedureContext<Http> & InputContext<I>, Extra>
-export type RequestContextConfig<Base, Args, Extra extends object> = {
+export type RequestContextConfig<Base, Args, Extra extends object, Http = unknown> = {
   resolve: (context: Base) => Extra | Promise<Extra>
   /** Synchronous, non-secret cache identity from raw caller arguments; never inferred from headers. */
-  keyContext?: (args: Args) => CacheKey
+  keyContext?: (args: Args, context: { http: Http }) => CacheKey
 }
-type Builder<Http, P, I, Extra extends object = {}> = {
+type Builder<Http, P, I, Extra extends object = {}, Deferred extends boolean = false> = {
   query: <O>(
     fn: (context: Context<Http, I, Extra>) => Promise<O>,
-  ) => QueryProcedure<CallArgs<P, I>, O>
+  ) => Finished<Http, QueryProcedure<CallArgs<P, I>, O>, Deferred>
   mutation: <O>(
     fn: (context: Context<Http, I, Extra>) => Promise<O>,
-  ) => MutationProcedure<CallArgs<P, I>, O, [I] extends [undefined] ? void : In<I>, PathArgs<P>>
+  ) => Finished<
+    Http,
+    MutationProcedure<CallArgs<P, I>, O, [I] extends [undefined] ? void : In<I>, PathArgs<P>>,
+    Deferred
+  >
   infiniteQuery: <O>(
     fn: (context: Context<Http, I, Extra> & { page: number }) => Promise<O>,
     next: (page: O) => number | undefined,
-  ) => InfiniteProcedure<CallArgs<P, I>, O>
-  input: <S extends Schema>(schema: S) => Builder<Http, P, S, [I] extends [undefined] ? Extra : {}>
+  ) => Finished<Http, InfiniteProcedure<CallArgs<P, I>, O>, Deferred>
+  input: <S extends Schema>(
+    schema: S,
+  ) => Builder<Http, P, S, [I] extends [undefined] ? Extra : {}, Deferred>
   context: <Added extends object>(
-    config: RequestContextConfig<Context<Http, I, Extra>, CallArgs<P, I>, Added>,
-  ) => Builder<Http, P, I, Merge<Extra, Added>>
-  key: (...segments: PathSegments) => Builder<Http, P, I, Extra>
+    config: RequestContextConfig<Context<Http, I, Extra>, CallArgs<P, I>, Added, Http>,
+  ) => Builder<Http, P, I, Merge<Extra, Added>, Deferred>
+  key: (...segments: PathSegments) => Builder<Http, P, I, Extra, Deferred>
+}
+
+export type ProcedureFactory<Http, Deferred extends boolean = false> = {
+  path: {
+    (...segments: PathSegments): Builder<Http, undefined, undefined, {}, Deferred>
+    <S extends Schema>(
+      schema: S,
+      segments: (path: Out<S>) => PathSegments,
+      rawKey?: (path: In<S>) => PathSegments,
+    ): Builder<Http, S, undefined, {}, Deferred>
+  }
 }
 
 function described<T, D>(value: T, definition: D): T & Described<D> {
@@ -88,14 +117,27 @@ async function validate<S extends Schema>(schema: S, input: unknown): Promise<Ou
 /** Author callable SDKs in core. Add query-library options later through an optional adapter. */
 export function createProcedure<Http>(
   transport: HttpTransport<Http>,
-  options: ProcedureOptions = {},
+  options: ProcedureOptions<Http> = {},
 ) {
-  function path(...segments: PathSegments): Builder<Http, undefined, undefined>
+  return createProcedureBuilder(transport, options, false)
+}
+
+/** Build client-free definitions. Only SDK initialization binds their execution methods. */
+export function createProcedureTemplates<Http>(): ProcedureFactory<Http, true> {
+  return createProcedureBuilder<Http, true>(undefined, {}, true)
+}
+
+function createProcedureBuilder<Http, Deferred extends boolean>(
+  transport: HttpTransport<Http> | undefined,
+  options: ProcedureOptions<Http>,
+  deferred: Deferred,
+): ProcedureFactory<Http, Deferred> {
+  function path(...segments: PathSegments): Builder<Http, undefined, undefined, {}, Deferred>
   function path<S extends Schema>(
     schema: S,
     segments: (path: Out<S>) => PathSegments,
     rawKey?: (path: In<S>) => PathSegments,
-  ): Builder<Http, S, undefined>
+  ): Builder<Http, S, undefined, {}, Deferred>
   function path(first: string | number | Schema, second?: unknown, ...rest: unknown[]): unknown {
     const parameterized = typeof first === 'object' && first !== null && '~standard' in first
     const pathSchema = parameterized ? first : undefined
@@ -124,10 +166,11 @@ export function createProcedure<Http>(
     requestContext?: RequestContextConfig<
       ProcedureContext<Http> & InputContext<I>,
       CallArgs<P, I>,
-      Extra
+      Extra,
+      Http
     >,
     rawKey: (params: unknown) => PathSegments = build,
-  ): Builder<Http, P, I, Extra> {
+  ): Builder<Http, P, I, Extra, Deferred> {
     type A = CallArgs<P, I>
     type V = [I] extends [undefined] ? void : In<I>
     type PA = PathArgs<P>
@@ -148,15 +191,6 @@ export function createProcedure<Http>(
     const pathParts = (args: A) => checkedParts(keySegments ?? rawKey(rawArgs(args).path))
     const baseKey = (args: A): CacheKey =>
       inputSchema ? [...pathParts(args), rawArgs(args).input] : [...pathParts(args)]
-    const keyContext = (args: A): CacheKey =>
-      requestContext?.keyContext?.(args) ?? options.keyContext?.() ?? []
-    const key = (args: A): CacheKey => [...baseKey(args), ...keyContext(args)]
-    const mutationKey = (args: PA): CacheKey => [
-      ...checkedParts(
-        keySegments ?? rawKey(pathSchema ? (args as { path: unknown }).path : undefined),
-      ),
-      ...(options.keyContext?.() ?? []),
-    ]
     const variables = (path: PA, input: V): A =>
       ({ ...(path ?? {}), ...(inputSchema ? { input } : {}) }) as A
     const make = <K extends 'query' | 'mutation' | 'infinite', O>(
@@ -164,50 +198,67 @@ export function createProcedure<Http>(
       fn: (context: Context<Http, I, Extra> & { page: number }) => Promise<O>,
       next?: (page: O) => number | undefined,
     ) => {
-      const execute = async (args: A, callOptions: CallOptions = {}, page = 1): Promise<O> => {
-        callOptions.signal?.throwIfAborted()
-        const raw = rawArgs(args)
-        const parsedPath = pathSchema ? await validate(pathSchema, raw.path) : undefined
-        const input = inputSchema ? await validate(inputSchema, raw.input) : undefined
-        callOptions.signal?.throwIfAborted()
-        const base = {
-          path: '/' + checkedParts(build(parsedPath)).join('/'),
-          http: transport.forRequest(callOptions),
-          ...(callOptions.signal ? { signal: callOptions.signal } : {}),
-          ...(inputSchema ? { input } : {}),
-        } as ProcedureContext<Http> & InputContext<I>
-        const extra = requestContext ? await requestContext.resolve(base) : {}
-        callOptions.signal?.throwIfAborted()
-        const context = { ...base, ...extra, ...(kind === 'infinite' ? { page } : {}) }
-        const output = await fn(context as unknown as Context<Http, I, Extra> & { page: number })
-        callOptions.signal?.throwIfAborted()
-        return output
+      const bind = (transport: HttpTransport<Http>, options: ProcedureOptions<Http>) => {
+        const keyContext = (args: A): CacheKey =>
+          requestContext?.keyContext?.(args, { http: transport.http }) ??
+          options.keyContext?.({ http: transport.http }) ??
+          []
+        const key = (args: A): CacheKey => [...baseKey(args), ...keyContext(args)]
+        const mutationKey = (args: PA): CacheKey => [
+          ...checkedParts(
+            keySegments ?? rawKey(pathSchema ? (args as { path: unknown }).path : undefined),
+          ),
+          ...(options.keyContext?.({ http: transport.http }) ?? []),
+        ]
+        const execute = async (args: A, callOptions: CallOptions = {}, page = 1): Promise<O> => {
+          callOptions.signal?.throwIfAborted()
+          const raw = rawArgs(args)
+          const parsedPath = pathSchema ? await validate(pathSchema, raw.path) : undefined
+          const input = inputSchema ? await validate(inputSchema, raw.input) : undefined
+          callOptions.signal?.throwIfAborted()
+          const base = {
+            path: '/' + checkedParts(build(parsedPath)).join('/'),
+            http: transport.forRequest(callOptions),
+            ...(callOptions.signal ? { signal: callOptions.signal } : {}),
+            ...(inputSchema ? { input } : {}),
+          } as ProcedureContext<Http> & InputContext<I>
+          const extra = requestContext ? await requestContext.resolve(base) : {}
+          callOptions.signal?.throwIfAborted()
+          const context = { ...base, ...extra, ...(kind === 'infinite' ? { page } : {}) }
+          const output = await fn(context as unknown as Context<Http, I, Extra> & { page: number })
+          callOptions.signal?.throwIfAborted()
+          return output
+        }
+        const definition: ProcedureDefinition<K, A, O, V, PA> = {
+          kind,
+          hasArgs,
+          hasPath: !!pathSchema,
+          queryKey: key,
+          execute,
+          variables,
+          ...(next ? { getNextPageParam: next } : {}),
+        }
+        if (kind === 'mutation')
+          return described({ mutate: execute, queryKey: mutationKey }, definition)
+        if (kind === 'infinite') {
+          const queryKey = (args: A) => [...key(args), 'infinite']
+          return described(
+            {
+              queryPage: (args: A, page: number, options?: CallOptions) =>
+                execute(args, options, page),
+              queryKey,
+              baseKey,
+            },
+            { ...definition, queryKey },
+          )
+        }
+        return described({ query: execute, queryKey: key, baseKey }, definition)
       }
-      const definition: ProcedureDefinition<K, A, O, V, PA> = {
-        kind,
-        hasArgs,
-        hasPath: !!pathSchema,
-        queryKey: key,
-        execute,
-        variables,
-        ...(next ? { getNextPageParam: next } : {}),
-      }
-      if (kind === 'mutation')
-        return described({ mutate: execute, queryKey: mutationKey }, definition)
-      if (kind === 'infinite') {
-        const queryKey = (args: A) => [...key(args), 'infinite']
-        return described(
-          {
-            queryPage: (args: A, page: number, options?: CallOptions) =>
-              execute(args, options, page),
-            queryKey,
-            baseKey,
-          },
-          { ...definition, queryKey },
-        )
-      }
-      return described({ query: execute, queryKey: key, baseKey }, definition)
+      if (deferred) return Object.freeze({ [procedureTemplate]: bind })
+      if (!transport) throw new Error('A bound procedure requires an HTTP transport')
+      return bind(transport, options)
     }
+
     return {
       query: <O>(fn: (context: Context<Http, I, Extra>) => Promise<O>) => make('query', fn),
       mutation: <O>(fn: (context: Context<Http, I, Extra>) => Promise<O>) => make('mutation', fn),
@@ -226,12 +277,13 @@ export function createProcedure<Http>(
             : (requestContext as unknown as RequestContextConfig<
                 ProcedureContext<Http> & InputContext<S>,
                 CallArgs<P, S>,
-                Extra
+                Extra,
+                Http
               >),
           rawKey,
         ),
       context: <Added extends object>(
-        config: RequestContextConfig<Context<Http, I, Extra>, A, Added>,
+        config: RequestContextConfig<Context<Http, I, Extra>, A, Added, Http>,
       ) =>
         builder(
           pathSchema,
@@ -258,7 +310,7 @@ export function createProcedure<Http>(
         ),
       key: (...segments: PathSegments) =>
         builder(pathSchema, inputSchema, build, segments, requestContext, rawKey),
-    } as unknown as Builder<Http, P, I, Extra>
+    } as unknown as Builder<Http, P, I, Extra, Deferred>
   }
   return { path }
 }

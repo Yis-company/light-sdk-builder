@@ -1,6 +1,8 @@
 # SDK initialization and plugins
 
-Author routes with core only. Pass the route factory and transport to `createSdk`. Routes are built once; explicitly registered plugins run once in order. Core imports no plugins and does no discovery or global registration.
+Author reusable definitions with core only: declare `createSdkBuilder<Http>()`, export `sdk.procedure` routes, then bind them with `sdk.create({ http, routes, plugins })`. Explicit plugins run once in order after binding. Core imports no plugins and does no discovery or global registration. [Reusable authoring](reusable-procedures.md) is preferred for multi-module SDKs.
+
+The existing route-factory API remains compatible:
 
 ```ts
 import { createSdk } from 'light-sdk-builder'
@@ -24,6 +26,12 @@ const options = frontend.users.list.queryOptions({ input: { search: 'Ada' } })
 The route factory contains no TanStack imports. The plugin adds query/mutation/infinite-query options and retains plain calls, including `queryPage`. A backend imports only core and its routes. Plugin configuration is local to each SDK, so enabling a plugin in one application does not affect another.
 
 For React, import `createUseTanStackSdk`, query hooks and `QueryClientProvider` from `light-sdk-builder-tanstack-query/react`. Configure the SDK hook once with your transport hook and the same route factory. Alternatively, use its exported `createUseSdk` with an application factory that calls `createSdk` and registers plugins explicitly. This entry uses React bindings' `/context` subpath and needs no auth package. Auth integration remains optional.
+
+## Reusable definitions
+
+The preferred multi-module authoring flow uses `createSdkBuilder<Http>()`. Import its `procedure` helper in route modules, then register plugins with `sdk.create({ http, routes, plugins: [tanstackQuery()] })`. Binding produces a fresh callable tree before plugins run. The same definitions can back a core-only server SDK and a separate TanStack SDK; enabling a plugin in one instance does not modify definitions or another instance.
+
+For React, use `createUseSdk(useHttp, http => sdk.create({ http, routes, plugins: [tanstackQuery()] }))`. The `createUseTanStackSdk` convenience factory also accepts an application factory that returns `sdk.create({ http, routes })`. See [reusable definitions](reusable-procedures.md) for client ownership, signal binding and key context. Existing route-factory registration above remains compatible.
 
 ## Other integrations
 

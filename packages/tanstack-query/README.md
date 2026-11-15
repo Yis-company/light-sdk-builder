@@ -28,6 +28,6 @@ Requires Node 22+ or a browser/Bun Fetch runtime, TypeScript 5.5+, and TanStack 
 
 Apache-2.0. See LICENSE and NOTICE.
 
-Register `tanstackQuery()` once in `createSdk({ routes, transport, plugins: [tanstackQuery()] })`. Route factories remain core-only; plain calls and infinite page methods are retained. `withTanStack` remains a legacy compatibility helper. `bindAuthToQueryClient(queryClient, authBridge)` isolates query caches across logical sessions while preserving them during credential rotation. Auth and React bindings remain separate optional packages.
+For reusable definitions, register `tanstackQuery()` in `sdk.create({ http, routes, plugins: [tanstackQuery()] })`. The existing `createSdk({ routes: factory, transport, plugins: [tanstackQuery()] })` remains supported. Definitions remain core-only; plain calls and infinite page methods are retained. `withTanStack` remains a legacy compatibility helper. `bindAuthToQueryClient(queryClient, authBridge)` isolates query caches across logical sessions while preserving them during credential rotation. Auth and React bindings remain separate optional packages.
 
 The optional `/react` entry exports `createUseTanStackSdk(useTransport, routes)` for a configured SDK hook, plus QueryClient/QueryClientProvider and normal query/mutation hooks. It uses `light-sdk-builder-react/context`, with no auth dependency. Install React, React Query and the React bindings to use this entry; the main entry remains framework-neutral.

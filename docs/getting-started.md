@@ -126,6 +126,8 @@ The contract-based endpoint client handles JSON. Procedure callbacks can use the
 
 ## Procedures for an existing API
 
+For multiple route modules, use [reusable procedures](reusable-procedures.md): import one typed authoring helper, export static definitions, then bind the runtime client once. The low-level bound API below remains supported.
+
 Use a procedure when you already have parsing/error conventions or need arbitrary request composition. Its callback returns the original result or error; a Standard Schema validator is optional.
 
 ```ts
@@ -178,7 +180,7 @@ const users = procedure
   .query(({ input, http, signal }) => http('/users', { params: input, signal }))
 ```
 
-Context resolvers compose in declaration order. Their fields extend or replace callback fields, including `http` and `input`. Replacing an existing input schema resets its context; add context after the schema it uses. `keyContext` is synchronous and reads raw caller arguments. Provide a non-secret identity whenever context changes the result; headers and resolved context never enter keys automatically. A later selector replaces the earlier selector. Constructor `createProcedure(transport, { keyContext })` supplies a default identity. Mutation keys use that default, excluding mutation variables.
+Context resolvers compose in declaration order. Their fields extend or replace callback fields, including `http` and `input`. Replacing an existing input schema resets its context; add context after the schema it uses. `keyContext(rawArgs, { http })` is synchronous and reads raw caller arguments plus the original client for that instance. Provide a non-secret identity whenever context changes the result; headers and resolved context never enter keys automatically. A later selector replaces the earlier selector. Constructor `createProcedure(transport, { keyContext })` supplies a default identity. Mutation keys use that default, excluding mutation variables.
 
 `queryKey(args)` appends key context to the path/input key. `baseKey(args)` omits it, for invalidation across application contexts. Infinite queries append `'infinite'` to their full key. Keys follow raw input; schema transforms apply only when the request executes.
 

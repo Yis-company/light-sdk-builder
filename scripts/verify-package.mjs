@@ -1,3 +1,4 @@
+import { verifyLintPackage } from './verify-lint-package.mjs'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, writeFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -20,7 +21,7 @@ const releaseDir = args.length ? resolve(root, args[1]) : undefined
 const artifacts = join(root, 'artifacts')
 await mkdir(artifacts, { recursive: true })
 const packages = await Promise.all(
-  ['core', 'auth', 'react', 'tanstack-query'].map(async (directory) => ({
+  ['core', 'auth', 'react', 'tanstack-query', 'eslint-plugin'].map(async (directory) => ({
     directory: join(root, 'packages', directory),
     manifest: JSON.parse(await readFile(join(root, 'packages', directory, 'package.json'), 'utf8')),
   })),
@@ -71,6 +72,25 @@ for (const { manifest: local } of packages) {
     !JSON.stringify(manifest).includes('workspace:'),
     'Published manifests must use npm-compatible ranges',
   )
+  if (local.name === 'eslint-plugin-light-sdk-builder') {
+    assert.equal(manifest.exports['.'], './src/index.js')
+    assert.deepEqual(
+      manifest.dependencies ?? {},
+      {},
+      'Lint must not introduce runtime dependencies',
+    )
+    assert.deepEqual(
+      manifest.peerDependencies ?? {},
+      {},
+      'Installing lint must not force SDK or framework dependencies',
+    )
+    const files = run('tar', ['-tzf', archive], root).trim().split('\n')
+    for (const path of ['src/index.js', 'LICENSE', 'NOTICE', 'README.md'])
+      assert(files.includes(`package/${path}`))
+    assert(files.every((file) => !file.startsWith('package/test/')))
+    assert.equal(manifest.license, 'Apache-2.0')
+    continue
+  }
   assert.equal(manifest.exports['.'].types, './dist/index.d.ts')
   assert.equal(manifest.exports['.'].import, './dist/index.js')
   const files = run('tar', ['-tzf', archive], root).trim().split('\n')
@@ -162,7 +182,7 @@ assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPat
       run(process.execPath, ['--experimental-import-meta-resolve', 'resolve-core.mjs'], cwd)
       await writeFile(join(cwd, 'consumer.ts'), types)
       await writeFile(join(cwd, 'quickstart.ts'), quickstart)
-      for (const name of ['auth.ts', 'procedures.ts', 'sdk.ts', 'http-client.ts'])
+      for (const name of ['auth.ts', 'procedures.ts', 'sdk.ts', 'http-client.ts', 'reusable.ts'])
         await writeFile(join(cwd, name), await readFile(join(root, 'test/types', name)))
       await writeFile(
         join(cwd, 'tsconfig.json'),
@@ -260,6 +280,7 @@ for (const manager of ['npm', 'bun']) {
   run(manager === 'npm' ? process.execPath : 'bun', ['react.mjs'], cwd)
   console.log(`${manager}: configured TanStack React hook/provider without auth passed`)
 }
+await verifyLintPackage({ archive: dependencies['eslint-plugin-light-sdk-builder'], fixture, run })
 const report = {
   archives: Object.fromEntries(packed),
   dependencies,

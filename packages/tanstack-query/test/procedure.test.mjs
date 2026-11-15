@@ -3,7 +3,12 @@ import { test } from 'node:test'
 import { QueryClient } from '@tanstack/query-core'
 import { z } from 'zod'
 import { userHttp } from '../../../test/user-http.mjs'
-import { createSdk, createProcedure, createHttpTransport } from 'light-sdk-builder'
+import {
+  createSdkBuilder,
+  createSdk,
+  createProcedure,
+  createHttpTransport,
+} from 'light-sdk-builder'
 import { tanstackQuery, withTanStack } from '../dist/index.js'
 
 function setup() {
@@ -149,4 +154,29 @@ test('the same facade adapts core HTTP endpoints and preserves unwrapped errors'
     sdk.bound.queryOptions(undefined).queryFn({ signal: new AbortController().signal }),
     (error) => error instanceof HttpError,
   )
+})
+
+test('reusable definitions bind before plugins and keep separate instance caches', async () => {
+  const builder = createSdkBuilder({ keyContext: ({ http }) => [http.owner] })
+  const routes = { get: builder.procedure.path('users').query(({ http }) => http.read()) }
+  const first = { owner: 'a', read: async () => 'a' }
+  const second = { owner: 'b', read: async () => 'b' }
+  const plain = builder.create({ http: first, routes })
+  const a = builder.create({ http: first, routes, plugins: [tanstackQuery()] })
+  const b = builder.create({ http: second, routes, plugins: [tanstackQuery()] })
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })
+  try {
+    assert.equal('queryOptions' in plain.get, false)
+    assert.equal('queryOptions' in routes.get, false)
+    assert.deepEqual(
+      await Promise.all([
+        client.fetchQuery(a.get.queryOptions()),
+        client.fetchQuery(b.get.queryOptions()),
+      ]),
+      ['a', 'b'],
+    )
+    assert.equal(await plain.get.query(), 'a')
+  } finally {
+    client.clear()
+  }
 })

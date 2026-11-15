@@ -1,0 +1,37 @@
+{
+  "name": "eslint-plugin-light-sdk-builder",
+  "version": "0.1.0-beta.0",
+  "description": "Opt-in route definition boundaries for light-sdk-builder.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yis-company/light-sdk-builder.git",
+    "directory": "packages/eslint-plugin"
+  },
+  "files": [
+    "src",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "8.72.2",
+    "eslint": "10.15.0",
+    "oxlint": "1.93.0",
+    "typescript": "5.5.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
