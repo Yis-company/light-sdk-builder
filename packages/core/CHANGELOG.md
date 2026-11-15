@@ -1,5 +1,11 @@
 # light-sdk-builder
 
+## 0.1.0-beta.3
+
+### Minor Changes
+
+- Keep HTTP clients and application policy user-owned. Replace createTransport with createHttpTransport, upFetch callback fields with http, scope policies with generic context resolvers, and allScopesKey with baseKey. Native up-fetch helpers must be imported directly from up-fetch. Rename React hook factories to createUseSdk and createUseTanStackSdk.
+
 ## 0.1.0-beta.2
 
 ### Minor Changes

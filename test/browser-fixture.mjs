@@ -7,7 +7,8 @@ window.sdkSmoke = (async () => {
   const headers = { 'X-Workspace': '7' }
   const client = createClient({
     baseUrl: 'https://fixture.invalid/api',
-    scope: { key: [7], headers },
+    keyContext: [7],
+    headers,
     fetch: async (url, init) => {
       requests.push({ url, workspace: init.headers.get('X-Workspace') })
       return Response.json({ name: 'Ada' })

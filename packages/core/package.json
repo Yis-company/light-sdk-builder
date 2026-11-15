@@ -1,6 +1,6 @@
 {
   "name": "light-sdk-builder",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "Schema-neutral SDK authoring for existing APIs.",
   "license": "Apache-2.0",
   "repository": {
@@ -30,8 +30,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@standard-schema/spec": "^1.1.0",
-    "up-fetch": "2.6.1"
+    "@standard-schema/spec": "^1.1.0"
   },
   "engines": {
     "node": ">=22"

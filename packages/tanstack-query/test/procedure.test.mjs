@@ -2,37 +2,35 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { QueryClient } from '@tanstack/query-core'
 import { z } from 'zod'
-import { createSdk, createProcedure, createTransport, scopeTransport } from 'light-sdk-builder'
+import { userHttp } from '../../../test/user-http.mjs'
+import { createSdk, createProcedure, createHttpTransport } from 'light-sdk-builder'
 import { tanstackQuery, withTanStack } from '../dist/index.js'
 
 function setup() {
   const calls = []
-  const request = scopeTransport(
-    createTransport(
-      async (req) => {
-        calls.push(req)
-        return Response.json({
-          page: Number(new URL(req.url).searchParams.get('page') ?? '1'),
-          ready: true,
-        })
-      },
-      () => ({ baseUrl: 'https://sdk.invalid' }),
-    ),
-    { key: [{ team: 7 }], headers: { 'X-Team': 7 } },
+  const request = userHttp(
+    async (req) => {
+      calls.push(req)
+      return Response.json({
+        page: Number(new URL(req.url).searchParams.get('page') ?? '1'),
+        ready: true,
+      })
+    },
+    () => ({ baseUrl: 'https://sdk.invalid', headers: { 'X-Team': 7 } }),
   )
-  const p = createProcedure(request)
+  const p = createProcedure(request, { keyContext: () => [{ team: 7 }] })
   const core = {
-    get: p.path('users').query(({ path, upFetch }) => upFetch(path)),
+    get: p.path('users').query(({ path, http }) => http(path)),
     list: p
       .path('users')
       .input(z.object({ q: z.string() }))
-      .query(({ input, path, upFetch }) => upFetch(path, { params: input })),
+      .query(({ input, path, http }) => http(path, { params: input })),
     update: p
       .path(z.object({ id: z.number() }), (path) => ['users', path.id])
       .input(z.object({ name: z.string() }))
-      .mutation(({ input, path, upFetch }) => upFetch(path, { method: 'POST', body: input })),
+      .mutation(({ input, path, http }) => http(path, { method: 'POST', body: input })),
     pages: p.path('pages').infiniteQuery(
-      ({ page, path, upFetch }) => upFetch(path, { params: { page } }),
+      ({ page, path, http }) => http(path, { params: { page } }),
       (page) => (page.page < 2 ? page.page + 1 : undefined),
     ),
   }
@@ -48,11 +46,11 @@ test('one SDK plugin registration enriches every agnostic procedure and retains 
   assert.equal('queryOptions' in core.get, false)
   assert.deepEqual(
     Object.keys(api.get).sort(),
-    ['allScopesKey', 'query', 'queryKey', 'queryOptions'].sort(),
+    ['baseKey', 'query', 'queryKey', 'queryOptions'].sort(),
   )
   assert.deepEqual(
     Object.keys(api.pages).sort(),
-    ['allScopesKey', 'queryKey', 'queryOptions', 'queryPage'].sort(),
+    ['baseKey', 'queryKey', 'queryOptions', 'queryPage'].sort(),
   )
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })
   try {

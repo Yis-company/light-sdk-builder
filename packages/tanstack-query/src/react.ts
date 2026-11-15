@@ -1,13 +1,13 @@
 import { createSdk } from 'light-sdk-builder'
-import { createSdkHook } from 'light-sdk-builder-react/context'
+import { createUseSdk } from 'light-sdk-builder-react/context'
 import { tanstackQuery } from './index.js'
 
 /** One application-level hook configuration; route factories and backend SDKs remain agnostic. */
-export function createTanStackHook<Transport extends object, Routes>(
+export function createUseTanStackSdk<Transport extends object, Routes>(
   useTransport: () => Transport,
   routes: (transport: Transport) => Routes,
 ) {
-  return createSdkHook(useTransport, (transport) =>
+  return createUseSdk(useTransport, (transport) =>
     createSdk({
       routes,
       transport,
@@ -25,4 +25,4 @@ export {
   useInfiniteQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-export { createSdkHook, createSdkContext } from 'light-sdk-builder-react/context'
+export { createUseSdk, createSdkContext } from 'light-sdk-builder-react/context'

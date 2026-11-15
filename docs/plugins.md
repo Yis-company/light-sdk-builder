@@ -23,7 +23,7 @@ const options = frontend.users.list.queryOptions({ input: { search: 'Ada' } })
 
 The route factory contains no TanStack imports. The plugin adds query/mutation/infinite-query options and retains plain calls, including `queryPage`. A backend imports only core and its routes. Plugin configuration is local to each SDK, so enabling a plugin in one application does not affect another.
 
-For React, import `createTanStackHook`, query hooks and `QueryClientProvider` from `light-sdk-builder-tanstack-query/react`. Configure the SDK hook once with your transport hook and the same route factory. Alternatively, use its exported `createSdkHook` with an application factory that calls `createSdk` and registers plugins explicitly. This entry uses React bindings' `/context` subpath and needs no auth package. Auth integration remains optional.
+For React, import `createUseTanStackSdk`, query hooks and `QueryClientProvider` from `light-sdk-builder-tanstack-query/react`. Configure the SDK hook once with your transport hook and the same route factory. Alternatively, use its exported `createUseSdk` with an application factory that calls `createSdk` and registers plugins explicitly. This entry uses React bindings' `/context` subpath and needs no auth package. Auth integration remains optional.
 
 ## Other integrations
 

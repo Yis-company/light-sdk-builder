@@ -1,16 +1,15 @@
 import assert from 'node:assert/strict'
 import { QueryClient } from '@tanstack/query-core'
-import { createProcedure, createSdk, createTransport } from 'light-sdk-builder'
+import { createProcedure, createSdk, createHttpTransport } from 'light-sdk-builder'
 import { tanstackQuery } from 'light-sdk-builder-tanstack-query'
 
-const transport = createTransport(
-  async () => Response.json({ ready: true }),
-  () => ({ baseUrl: 'https://fixture.invalid' }),
-)
+const transport = createHttpTransport(async () => Response.json({ ready: true }))
 const routes = (client) => ({
   ping: createProcedure(client)
     .path('ping')
-    .query(({ path, upFetch }) => upFetch(path)),
+    .query(async ({ path, http, signal }) =>
+      (await http(new URL(path, 'https://fixture.invalid'), { signal })).json(),
+    ),
 })
 const sdk = createSdk({ routes, transport, plugins: [tanstackQuery()] })
 const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })

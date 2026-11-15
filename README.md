@@ -14,7 +14,7 @@ This Bun/Turborepo monorepo contains four ESM packages:
 
 Connect authentication once through an application-owned source. React bindings and TanStack Query are optional. See [Auth integration](docs/auth.md).
 
-Core/TanStack are **`0.1.0-beta.2`**, React is **`0.1.0-beta.1`**, and auth is **`0.1.0-beta.0`**. Publication is pending; the API may change during beta. Supports Node 22+, Bun, browsers with Fetch/AbortController, and TypeScript 5.5+. Core requires neither React nor a validator implementation.
+Core/TanStack are **`0.1.0-beta.3`**, React is **`0.1.0-beta.2`**, and auth is **`0.1.0-beta.0`**. Publication is pending; the API may change during beta. Supports Node 22+, Bun, browsers with Fetch/AbortController, and TypeScript 5.5+. Core requires neither React, up-fetch nor a validator implementation. Procedure callbacks accept native fetch, up-fetch or a custom HTTP client without changing the client's types or errors.
 
 ## Quickstart
 

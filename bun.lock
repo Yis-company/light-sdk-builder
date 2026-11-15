@@ -21,6 +21,7 @@
         "turbo": "2.11.11",
         "typescript": "7.0.2",
         "typescript-minimum": "npm:typescript@5.5.4",
+        "up-fetch": "2.6.1",
         "valibot": "1.5.0",
         "zod": "4.6.7",
       },
@@ -31,15 +32,14 @@
     },
     "packages/core": {
       "name": "light-sdk-builder",
-      "version": "0.1.0-beta.2",
+      "version": "0.1.0-beta.3",
       "dependencies": {
         "@standard-schema/spec": "^1.1.0",
-        "up-fetch": "2.6.1",
       },
     },
     "packages/react": {
       "name": "light-sdk-builder-react",
-      "version": "0.1.0-beta.1",
+      "version": "0.1.0-beta.2",
       "devDependencies": {
         "light-sdk-builder-auth": "^0.1.0-beta.0",
       },
@@ -53,19 +53,19 @@
     },
     "packages/tanstack-query": {
       "name": "light-sdk-builder-tanstack-query",
-      "version": "0.1.0-beta.2",
+      "version": "0.1.0-beta.3",
       "devDependencies": {
         "@tanstack/query-core": "5.105.0",
         "@tanstack/react-query": "^5.105.0",
-        "light-sdk-builder": "^0.1.0-beta.2",
-        "light-sdk-builder-react": "^0.1.0-beta.1",
+        "light-sdk-builder": "^0.1.0-beta.3",
+        "light-sdk-builder-react": "^0.1.0-beta.2",
         "react": "^19.3.1",
       },
       "peerDependencies": {
         "@tanstack/query-core": "^5.105.0",
         "@tanstack/react-query": "^5.105.0",
-        "light-sdk-builder": "^0.1.0-beta.2",
-        "light-sdk-builder-react": "^0.1.0-beta.1",
+        "light-sdk-builder": "^0.1.0-beta.3",
+        "light-sdk-builder-react": "^0.1.0-beta.2",
         "react": "^19.3.1",
       },
       "optionalPeers": [

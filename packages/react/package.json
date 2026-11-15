@@ -1,6 +1,6 @@
 {
   "name": "light-sdk-builder-react",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Optional React bindings for light-sdk-builder.",
   "license": "Apache-2.0",
   "repository": {

@@ -1,6 +1,6 @@
 import { createAuthBridge, type AuthSource } from 'light-sdk-builder-auth'
 import { createSdkContext, useAuthBridge, useAuthSnapshot } from 'light-sdk-builder-react'
-import { createTransport, createProcedure } from 'light-sdk-builder'
+import { createHttpTransport, createProcedure } from 'light-sdk-builder'
 import { withTanStack } from 'light-sdk-builder-tanstack-query'
 
 const source: AuthSource = {
@@ -23,11 +23,11 @@ const source: AuthSource = {
   },
 }
 const bridge = createAuthBridge(source)
-const transport = createTransport(bridge.fetch)
+const transport = createHttpTransport(bridge.fetch)
 const sdk = {
   ping: createProcedure(transport)
     .path('ping')
-    .query(({ upFetch }) => upFetch('/ping')),
+    .query(({ http }) => http('/ping')),
 }
 const enhanced = withTanStack(sdk)
 void enhanced.ping.queryOptions()

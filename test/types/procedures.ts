@@ -1,12 +1,9 @@
 import { z } from 'zod'
 import { useQuery, useMutation, useInfiniteQuery, QueryClient } from '@tanstack/react-query'
-import { createProcedure, createTransport, type StandardSchemaV1 } from 'light-sdk-builder'
+import { createProcedure, createHttpTransport, type StandardSchemaV1 } from 'light-sdk-builder'
 import { withTanStack } from 'light-sdk-builder-tanstack-query'
 
-const p = createProcedure(createTransport(), {
-  scope: (id) => ({ key: [id] }),
-  scopeContextKey: 'teamId',
-})
+const p = createProcedure(createHttpTransport(fetch))
 const core = {
   get: p
     .path('users')
@@ -20,7 +17,13 @@ const core = {
         team: z.number().optional(),
       }),
     )
-    .scope('team')
+    .context({
+      resolve: ({ input }) => {
+        const { team, ...remaining } = input
+        return { input: remaining, teamId: team }
+      },
+      keyContext: ({ input }) => [input.team],
+    })
     .mutation(async ({ input, teamId }) => ({ length: input.name, team: teamId })),
   pages: p.path('users').infiniteQuery(
     async ({ page }) => ({ page }),

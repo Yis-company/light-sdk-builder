@@ -1,12 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { type CacheKey } from './endpoint.js'
 import { type CallOptions } from './operation.js'
-import {
-  scopeTransport,
-  withRequestSignal,
-  type RequestTransport,
-  type TransportScope,
-} from './transport.js'
+import type { HttpTransport } from './transport.js'
 
 type Schema = StandardSchemaV1
 type In<S> = S extends Schema ? StandardSchemaV1.InferInput<S> : never
@@ -16,11 +11,9 @@ type Args<P, I> = ([P] extends [undefined] ? {} : { path: In<P> }) &
   ([I] extends [undefined] ? {} : { input: In<I> })
 type CallArgs<P, I> = [P, I] extends [undefined, undefined] ? void : Args<P, I>
 type PathArgs<P> = P extends Schema ? { path: In<P> } : void
-export type ProcedureContext = { path: string; upFetch: RequestTransport; signal?: AbortSignal }
-export type ProcedurePolicy<ContextKey extends string = 'scopeId'> = {
-  scope?: (value: unknown) => TransportScope
-  scopeContextKey?: ContextKey
-}
+export type ProcedureContext<Http = unknown> = { path: string; http: Http; signal?: AbortSignal }
+export type ProcedureOptions = { keyContext?: () => CacheKey }
+type Merge<Base, Extra> = Omit<Base, keyof Extra> & Extra
 export const procedureDefinition: unique symbol = Symbol('light-sdk-builder.procedure')
 
 export type ProcedureDefinition<
@@ -42,7 +35,7 @@ type Described<D> = { readonly [procedureDefinition]: D }
 export type QueryProcedure<A, O> = {
   query: (args: A, options?: CallOptions) => Promise<O>
   queryKey: (args: A) => CacheKey
-  allScopesKey: (args: A) => CacheKey
+  baseKey: (args: A) => CacheKey
 } & Described<ProcedureDefinition<'query', A, O>>
 export type MutationProcedure<A, O, V, P> = {
   mutate: (args: A, options?: CallOptions) => Promise<O>
@@ -51,36 +44,32 @@ export type MutationProcedure<A, O, V, P> = {
 export type InfiniteProcedure<A, O> = {
   queryPage: (args: A, page: number, options?: CallOptions) => Promise<O>
   queryKey: (args: A) => CacheKey
-  allScopesKey: (args: A) => CacheKey
+  baseKey: (args: A) => CacheKey
 } & Described<ProcedureDefinition<'infinite', A, O>>
 
-type InputContext<I, Removed extends PropertyKey, ContextKey extends string> = [I] extends [
-  undefined,
-]
-  ? {}
-  : [Removed] extends [never]
-    ? { input: Out<I> }
-    : { input: Omit<Out<I>, Removed> } & Record<
-        ContextKey,
-        Removed extends keyof Out<I> ? Out<I>[Removed] : never
-      >
-
-type Builder<P, I, ContextKey extends string, Removed extends PropertyKey = never> = {
+type InputContext<I> = [I] extends [undefined] ? {} : { input: Out<I> }
+type Context<Http, I, Extra> = Merge<ProcedureContext<Http> & InputContext<I>, Extra>
+export type RequestContextConfig<Base, Args, Extra extends object> = {
+  resolve: (context: Base) => Extra | Promise<Extra>
+  /** Synchronous, non-secret cache identity from raw caller arguments; never inferred from headers. */
+  keyContext?: (args: Args) => CacheKey
+}
+type Builder<Http, P, I, Extra extends object = {}> = {
   query: <O>(
-    fn: (context: ProcedureContext & InputContext<I, Removed, ContextKey>) => Promise<O>,
+    fn: (context: Context<Http, I, Extra>) => Promise<O>,
   ) => QueryProcedure<CallArgs<P, I>, O>
   mutation: <O>(
-    fn: (context: ProcedureContext & InputContext<I, Removed, ContextKey>) => Promise<O>,
+    fn: (context: Context<Http, I, Extra>) => Promise<O>,
   ) => MutationProcedure<CallArgs<P, I>, O, [I] extends [undefined] ? void : In<I>, PathArgs<P>>
   infiniteQuery: <O>(
-    fn: (
-      context: ProcedureContext & InputContext<I, Removed, ContextKey> & { page: number },
-    ) => Promise<O>,
+    fn: (context: Context<Http, I, Extra> & { page: number }) => Promise<O>,
     next: (page: O) => number | undefined,
   ) => InfiniteProcedure<CallArgs<P, I>, O>
-  input: <S extends Schema>(schema: S) => Builder<P, S, ContextKey>
-  scope: <K extends keyof Out<I>>(field: K) => Builder<P, I, ContextKey, K>
-  key: (...segments: PathSegments) => Builder<P, I, ContextKey, Removed>
+  input: <S extends Schema>(schema: S) => Builder<Http, P, S, [I] extends [undefined] ? Extra : {}>
+  context: <Added extends object>(
+    config: RequestContextConfig<Context<Http, I, Extra>, CallArgs<P, I>, Added>,
+  ) => Builder<Http, P, I, Merge<Extra, Added>>
+  key: (...segments: PathSegments) => Builder<Http, P, I, Extra>
 }
 
 function described<T, D>(value: T, definition: D): T & Described<D> {
@@ -97,16 +86,16 @@ async function validate<S extends Schema>(schema: S, input: unknown): Promise<Ou
 }
 
 /** Author callable SDKs in core. Add query-library options later through an optional adapter. */
-export function createProcedure<ContextKey extends string = 'scopeId'>(
-  transport: RequestTransport,
-  policy: ProcedurePolicy<ContextKey> = {},
+export function createProcedure<Http>(
+  transport: HttpTransport<Http>,
+  options: ProcedureOptions = {},
 ) {
-  function path(...segments: PathSegments): Builder<undefined, undefined, ContextKey>
+  function path(...segments: PathSegments): Builder<Http, undefined, undefined>
   function path<S extends Schema>(
     schema: S,
     segments: (path: Out<S>) => PathSegments,
     rawKey?: (path: In<S>) => PathSegments,
-  ): Builder<S, undefined, ContextKey>
+  ): Builder<Http, S, undefined>
   function path(first: string | number | Schema, second?: unknown, ...rest: unknown[]): unknown {
     const parameterized = typeof first === 'object' && first !== null && '~standard' in first
     const pathSchema = parameterized ? first : undefined
@@ -126,15 +115,19 @@ export function createProcedure<ContextKey extends string = 'scopeId'>(
   function builder<
     P extends Schema | undefined,
     I extends Schema | undefined,
-    Removed extends PropertyKey = never,
+    Extra extends object = {},
   >(
     pathSchema: P,
     inputSchema: I,
     build: (params: unknown) => PathSegments,
     keySegments?: PathSegments,
-    scopeField?: Removed,
+    requestContext?: RequestContextConfig<
+      ProcedureContext<Http> & InputContext<I>,
+      CallArgs<P, I>,
+      Extra
+    >,
     rawKey: (params: unknown) => PathSegments = build,
-  ): Builder<P, I, ContextKey, Removed> {
+  ): Builder<Http, P, I, Extra> {
     type A = CallArgs<P, I>
     type V = [I] extends [undefined] ? void : In<I>
     type PA = PathArgs<P>
@@ -153,59 +146,41 @@ export function createProcedure<ContextKey extends string = 'scopeId'>(
       return parts
     }
     const pathParts = (args: A) => checkedParts(keySegments ?? rawKey(rawArgs(args).path))
-    const allScopesKey = (args: A): CacheKey =>
+    const baseKey = (args: A): CacheKey =>
       inputSchema ? [...pathParts(args), rawArgs(args).input] : [...pathParts(args)]
-    const selected = (input: unknown) => {
-      const value =
-        scopeField === undefined ? undefined : (input as Record<PropertyKey, unknown>)[scopeField]
-      if (value === undefined) return transport
-      if (!policy.scope) throw new Error('An input scope requires a scope policy')
-      return scopeTransport(transport, policy.scope(value))
-    }
-    const key = (args: A): CacheKey => [
-      ...allScopesKey(args),
-      ...selected(inputSchema ? rawArgs(args).input : undefined).getQueryKeyContext(),
-    ]
+    const keyContext = (args: A): CacheKey =>
+      requestContext?.keyContext?.(args) ?? options.keyContext?.() ?? []
+    const key = (args: A): CacheKey => [...baseKey(args), ...keyContext(args)]
     const mutationKey = (args: PA): CacheKey => [
       ...checkedParts(
         keySegments ?? rawKey(pathSchema ? (args as { path: unknown }).path : undefined),
       ),
-      ...transport.getQueryKeyContext(),
+      ...(options.keyContext?.() ?? []),
     ]
     const variables = (path: PA, input: V): A =>
       ({ ...(path ?? {}), ...(inputSchema ? { input } : {}) }) as A
     const make = <K extends 'query' | 'mutation' | 'infinite', O>(
       kind: K,
-      fn: (
-        context: ProcedureContext & InputContext<I, Removed, ContextKey> & { page: number },
-      ) => Promise<O>,
+      fn: (context: Context<Http, I, Extra> & { page: number }) => Promise<O>,
       next?: (page: O) => number | undefined,
     ) => {
-      const execute = async (args: A, options: CallOptions = {}, page = 1): Promise<O> => {
-        options.signal?.throwIfAborted()
+      const execute = async (args: A, callOptions: CallOptions = {}, page = 1): Promise<O> => {
+        callOptions.signal?.throwIfAborted()
         const raw = rawArgs(args)
         const parsedPath = pathSchema ? await validate(pathSchema, raw.path) : undefined
         const input = inputSchema ? await validate(inputSchema, raw.input) : undefined
-        options.signal?.throwIfAborted()
-        const requestTransport = selected(input)
-        const context: Record<PropertyKey, unknown> = {
+        callOptions.signal?.throwIfAborted()
+        const base = {
           path: '/' + checkedParts(build(parsedPath)).join('/'),
-          upFetch: withRequestSignal(requestTransport, options.signal),
-        }
-        if (kind === 'infinite') context.page = page
-        if (options.signal !== undefined) context.signal = options.signal
-        if (inputSchema) {
-          if (scopeField === undefined) context.input = input
-          else {
-            const { [scopeField]: scopeValue, ...remaining } = input as Record<PropertyKey, unknown>
-            context.input = remaining
-            context[policy.scopeContextKey ?? 'scopeId'] = scopeValue
-          }
-        }
-        const output = await fn(
-          context as ProcedureContext & InputContext<I, Removed, ContextKey> & { page: number },
-        )
-        options.signal?.throwIfAborted()
+          http: transport.forRequest(callOptions),
+          ...(callOptions.signal ? { signal: callOptions.signal } : {}),
+          ...(inputSchema ? { input } : {}),
+        } as ProcedureContext<Http> & InputContext<I>
+        const extra = requestContext ? await requestContext.resolve(base) : {}
+        callOptions.signal?.throwIfAborted()
+        const context = { ...base, ...extra, ...(kind === 'infinite' ? { page } : {}) }
+        const output = await fn(context as unknown as Context<Http, I, Extra> & { page: number })
+        callOptions.signal?.throwIfAborted()
         return output
       }
       const definition: ProcedureDefinition<K, A, O, V, PA> = {
@@ -226,33 +201,64 @@ export function createProcedure<ContextKey extends string = 'scopeId'>(
             queryPage: (args: A, page: number, options?: CallOptions) =>
               execute(args, options, page),
             queryKey,
-            allScopesKey,
+            baseKey,
           },
           { ...definition, queryKey },
         )
       }
-      return described({ query: execute, queryKey: key, allScopesKey }, definition)
+      return described({ query: execute, queryKey: key, baseKey }, definition)
     }
     return {
-      query: <O>(
-        fn: (context: ProcedureContext & InputContext<I, Removed, ContextKey>) => Promise<O>,
-      ) => make('query', fn),
-      mutation: <O>(
-        fn: (context: ProcedureContext & InputContext<I, Removed, ContextKey>) => Promise<O>,
-      ) => make('mutation', fn),
+      query: <O>(fn: (context: Context<Http, I, Extra>) => Promise<O>) => make('query', fn),
+      mutation: <O>(fn: (context: Context<Http, I, Extra>) => Promise<O>) => make('mutation', fn),
       infiniteQuery: <O>(
-        fn: (
-          context: ProcedureContext & InputContext<I, Removed, ContextKey> & { page: number },
-        ) => Promise<O>,
+        fn: (context: Context<Http, I, Extra> & { page: number }) => Promise<O>,
         next: (page: O) => number | undefined,
       ) => make('infinite', fn, next),
       input: <S extends Schema>(schema: S) =>
-        builder(pathSchema, schema, build, keySegments, undefined, rawKey),
-      scope: <K extends keyof Out<I>>(field: K) =>
-        builder(pathSchema, inputSchema, build, keySegments, field, rawKey),
+        builder(
+          pathSchema,
+          schema,
+          build,
+          keySegments,
+          inputSchema
+            ? undefined
+            : (requestContext as unknown as RequestContextConfig<
+                ProcedureContext<Http> & InputContext<S>,
+                CallArgs<P, S>,
+                Extra
+              >),
+          rawKey,
+        ),
+      context: <Added extends object>(
+        config: RequestContextConfig<Context<Http, I, Extra>, A, Added>,
+      ) =>
+        builder(
+          pathSchema,
+          inputSchema,
+          build,
+          keySegments,
+          {
+            resolve: async (base) => {
+              const previous = requestContext ? await requestContext.resolve(base) : {}
+              return {
+                ...previous,
+                ...(await config.resolve({ ...base, ...previous } as unknown as Context<
+                  Http,
+                  I,
+                  Extra
+                >)),
+              } as Merge<Extra, Added>
+            },
+            ...(config.keyContext || requestContext?.keyContext
+              ? { keyContext: config.keyContext ?? requestContext!.keyContext! }
+              : {}),
+          },
+          rawKey,
+        ),
       key: (...segments: PathSegments) =>
-        builder(pathSchema, inputSchema, build, segments, scopeField, rawKey),
-    } as unknown as Builder<P, I, ContextKey, Removed>
+        builder(pathSchema, inputSchema, build, segments, requestContext, rawKey),
+    } as unknown as Builder<Http, P, I, Extra>
   }
   return { path }
 }

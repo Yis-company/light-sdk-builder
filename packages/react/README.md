@@ -2,7 +2,7 @@
 
 Optional React bindings. Authentication logic stays in your auth system; SDK request code never invokes React hooks.
 
-`createSdkContext<SDK>()` provides a Provider accepting `sdk` and a `useSdk()` hook. `createSdkHook(useClient, createSdk)` shares one SDK per client across hook consumers, avoiding repeated construction of route schemas. `useAuthBridge(source, options)` adapts committed React callbacks to a stable framework-neutral auth bridge. `useAuthSnapshot(bridge)` observes non-secret metadata through React's external-store API.
+`createSdkContext<SDK>()` provides a Provider accepting `sdk` and a `useSdk()` hook. `createUseSdk(useClient, createSdk)` shares one SDK per client across hook consumers, avoiding repeated construction of route schemas. `useAuthBridge(source, options)` adapts committed React callbacks to a stable framework-neutral auth bridge. `useAuthSnapshot(bridge)` observes non-secret metadata through React's external-store API.
 
 Pass your existing auth context through `AuthSource` getters, optional recovery and subscription. Ordinary React rerenders reconcile metadata without cancelling valid asynchronous credential reads. Switching source instances rebinds subscriptions, even when they share a prototype method. Source notification events invalidate stale pending reads. The hook cleans up its subscriptions on unmount; in-flight callers retain their bridge. Explicitly created non-React bridges have a `dispose` method for their owner.
 

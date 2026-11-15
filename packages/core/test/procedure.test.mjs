@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { z } from 'zod'
-import { createProcedure, createTransport, scopeTransport, isResponseError } from '../dist/index.js'
+import { createProcedure, createHttpTransport } from '../dist/index.js'
+import { isResponseError } from 'up-fetch'
+import { userHttp } from '../../../test/user-http.mjs'
 
 const identity = {
   '~standard': { version: 1, vendor: 'identity', validate: (value) => ({ value }) },
 }
 function transport(fetcher) {
-  return createTransport(fetcher, () => ({
+  return userHttp(fetcher, () => ({
     baseUrl: 'https://sdk.invalid',
     headers: { 'App-Source': 'test' },
   }))
@@ -24,7 +26,7 @@ test('core procedures perform validated direct calls without query-library optio
   const get = p
     .path(z.object({ id: z.number().transform(String) }), (params) => ['users', params.id])
     .input(z.object({ count: z.string().transform(Number) }))
-    .query(({ path, input, upFetch }) => upFetch(path, { params: input, schema: identity }))
+    .query(({ path, input, http }) => http(path, { params: input, schema: identity }))
   assert.equal('queryOptions' in get, false)
   assert.deepEqual(await get.query({ path: { id: 7 }, input: { count: '2' } }), { ready: true })
   assert.equal(seen[0].url, 'https://sdk.invalid/users/7?count=2')
@@ -35,31 +37,41 @@ test('core procedures perform validated direct calls without query-library optio
   ])
 })
 
-test('generic input scope owns request headers and matching keys while removing policy fields', async () => {
+test('user context owns headers, input shaping and explicit matching cache identity', async () => {
   const seen = []
-  const scoped = scopeTransport(
+  const p = createProcedure(
     transport(async (request) => {
       seen.push(request)
       return Response.json({ ready: true })
     }),
-    { key: [{ team: 7 }], headers: { 'X-Team': 7 } },
+    { keyContext: () => [{ team: 7 }] },
   )
-  const p = createProcedure(scoped, {
-    scope: (id) => ({ key: [{ team: id }], headers: { 'X-Team': id } }),
-    scopeContextKey: 'teamId',
-  })
   const get = p
     .path('users')
     .input(z.object({ team: z.number().optional(), q: z.string() }))
-    .scope('team')
-    .query(({ input, teamId, path, upFetch }) => {
+    .context({
+      resolve: ({ input, http }) => {
+        const { team, ...remaining } = input
+        return {
+          input: remaining,
+          teamId: team,
+          http: (path, init) => {
+            const headers = new Headers(init?.headers)
+            headers.set('X-Team', String(team))
+            return http(path, { ...init, headers })
+          },
+        }
+      },
+      keyContext: ({ input }) => [{ team: input.team ?? 7 }],
+    })
+    .query(({ input, teamId, path, http }) => {
       assert.deepEqual(input, { q: 'Ada' })
       assert.equal(teamId, 9)
-      return upFetch(path, { headers: { 'x-team': 5 }, params: input })
+      return http(path, { headers: { 'x-team': 5 }, params: input })
     })
   const args = { input: { team: 9, q: 'Ada' } }
   assert.deepEqual(get.queryKey(args), ['users', args.input, { team: 9 }])
-  assert.deepEqual(get.allScopesKey(args), ['users', args.input])
+  assert.deepEqual(get.baseKey(args), ['users', args.input])
   await get.query(args)
   assert.equal(seen[0].headers.get('X-Team'), '9')
   assert.equal(seen[0].url, 'https://sdk.invalid/users?q=Ada')
@@ -83,10 +95,10 @@ test('transport keeps multipart bodies, binary parsing and typed response errors
   const uploadProcedure = p
     .path('documents')
     .input(identity)
-    .mutation(({ input, path, upFetch }) => {
+    .mutation(({ input, path, http }) => {
       const body = new FormData()
       body.append('file', input.file)
-      return upFetch(path, { method: 'POST', body })
+      return http(path, { method: 'POST', body })
     })
   await uploadProcedure.mutate({ input: { file } })
   assert.equal(upload.get('file').name, 'document.txt')
@@ -94,7 +106,7 @@ test('transport keeps multipart bodies, binary parsing and typed response errors
   mode = 'download'
   const download = p
     .path('report')
-    .query(({ path, upFetch }) => upFetch(path, { parseResponse: (response) => response.blob() }))
+    .query(({ path, http }) => http(path, { parseResponse: (response) => response.blob() }))
   assert.equal(await (await download.query()).text(), 'report')
   mode = 'error'
   await assert.rejects(
@@ -115,7 +127,7 @@ test('procedure cancellation reaches HTTP and abort during validation prevents e
       return Response.json({ ready: true })
     }),
   )
-  const get = p.path('users').query(({ path, upFetch }) => upFetch(path))
+  const get = p.path('users').query(({ path, http }) => http(path))
   const controller = new AbortController()
   await get.query(undefined, { signal: controller.signal })
   assert.equal(signal.aborted, false)
@@ -136,7 +148,7 @@ test('procedure cancellation reaches HTTP and abort during validation prevents e
   const delayed = p
     .path('users')
     .input(asyncInput)
-    .query(({ path, upFetch }) => upFetch(path))
+    .query(({ path, http }) => http(path))
   const aborted = new AbortController()
   const result = delayed.query({ input: {} }, { signal: aborted.signal })
   aborted.abort('cancelled')
@@ -154,25 +166,113 @@ test('structural path transforms can declare raw key segments independently from
       (value) => ['users', value.id],
       (raw) => ['users', raw],
     )
-    .query(({ path, upFetch }) => upFetch(path))
+    .query(({ path, http }) => http(path))
   assert.deepEqual(get.queryKey({ path: '7' }), ['users', '7'])
   assert.deepEqual(await get.query({ path: '7' }), { url: 'https://sdk.invalid/users/7' })
   const missingRawBuilder = p.path(schema, (value) => ['users', value.id]).query(async () => null)
   assert.throws(() => missingRawBuilder.queryKey({ path: '7' }), /raw key builder/)
 })
 
-test('clearing a scope removes inherited and request scope headers', async () => {
-  let headers
-  const base = createTransport(
-    async (request) => {
-      headers = request.headers
-      return Response.json({ ready: true })
-    },
-    () => ({ baseUrl: 'https://sdk.invalid', headers: { 'X-Team': 7 } }),
+test('user context can choose a different client without changing the shared transport', async () => {
+  const requests = []
+  const first = async (url, init) => {
+    requests.push(new Headers(init?.headers).get('X-Custom'))
+    return Response.json({ ready: true })
+  }
+  const p = createProcedure(createHttpTransport(first))
+  const custom = p
+    .path('users')
+    .context({
+      resolve: ({ http }) => ({
+        http: (url, init) => http(url, { ...init, headers: { 'X-Custom': 'chosen' } }),
+      }),
+      keyContext: () => ['chosen'],
+    })
+    .query(({ http }) => http('https://sdk.invalid'))
+  const plain = p.path('users').query(({ http }) => http('https://sdk.invalid'))
+  await custom.query()
+  await plain.query()
+  assert.deepEqual(requests, ['chosen', null])
+  assert.deepEqual(custom.queryKey(), ['users', 'chosen'])
+  assert.deepEqual(plain.queryKey(), ['users'])
+})
+
+test('plain fetch remains a fetch client with native responses and explicit cancellation', async () => {
+  const send = async (_url, init) => {
+    init.signal.throwIfAborted()
+    return Response.json({ ready: true })
+  }
+  const get = createProcedure(createHttpTransport(send))
+    .path('plain')
+    .query(({ http, signal }) => http('https://sdk.invalid', { signal }))
+  const controller = new AbortController()
+  const response = await get.query(undefined, { signal: controller.signal })
+  assert(response instanceof Response)
+  assert.deepEqual(await response.json(), { ready: true })
+  controller.abort('cancelled')
+  await assert.rejects(
+    get.query(undefined, { signal: controller.signal }),
+    (error) => error === 'cancelled',
   )
-  const single = scopeTransport(base, { key: [{ team: 9 }], headers: { 'X-Team': 9 } })
-  const all = scopeTransport(single, { key: [], headers: { 'X-Team': undefined } })
-  await all('/users', { headers: { 'x-team': 5 } })
-  assert.equal(headers.get('X-Team'), null)
-  assert.deepEqual(all.getQueryKeyContext(), [])
+})
+
+test('an object HTTP client keeps its methods, results and original errors', async () => {
+  const error = new Error('custom failure')
+  const client = {
+    get: async (path) => {
+      if (path === '/failure') throw error
+      return { path }
+    },
+  }
+  const p = createProcedure(createHttpTransport(client))
+  assert.deepEqual(
+    await p
+      .path('users')
+      .query(({ http, path }) => http.get(path))
+      .query(),
+    { path: '/users' },
+  )
+  await assert.rejects(
+    p
+      .path('failure')
+      .query(({ http, path }) => http.get(path))
+      .query(),
+    (caught) => caught === error,
+  )
+})
+
+test('context layers compose once while raw keys stay synchronous', async () => {
+  let calls = 0
+  const p = createProcedure(createHttpTransport({ get: async () => 'done' }))
+  const get = p
+    .path('context')
+    .context({
+      resolve: () => {
+        calls++
+        return { tag: 'application' }
+      },
+    })
+    .input(z.object({ value: z.string().transform(Number) }))
+    .context({
+      resolve: async ({ tag, input }) => {
+        calls++
+        return { label: `${tag}:${input.value}` }
+      },
+      keyContext: ({ input }) => [input.value],
+    })
+    .query(async ({ label, tag, input, http }) => ({
+      label,
+      tag,
+      value: input.value,
+      result: await http.get(),
+    }))
+  assert.deepEqual(get.queryKey({ input: { value: '2' } }), ['context', { value: '2' }, '2'])
+  assert.equal(calls, 0)
+  assert.deepEqual(await get.query({ input: { value: '2' } }), {
+    label: 'application:2',
+    tag: 'application',
+    value: 2,
+    result: 'done',
+  })
+  assert.equal(calls, 2)
 })

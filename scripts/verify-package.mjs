@@ -132,6 +132,7 @@ for (const manager of ['npm', 'bun']) {
               typescript: '5.5.4',
               zod: '4.6.7',
               valibot: '1.5.0',
+              'up-fetch': '2.6.1',
             }
           : { 'light-sdk-builder': dependencies['light-sdk-builder'] },
       }),
@@ -161,7 +162,7 @@ assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPat
       run(process.execPath, ['--experimental-import-meta-resolve', 'resolve-core.mjs'], cwd)
       await writeFile(join(cwd, 'consumer.ts'), types)
       await writeFile(join(cwd, 'quickstart.ts'), quickstart)
-      for (const name of ['auth.ts', 'procedures.ts', 'sdk.ts'])
+      for (const name of ['auth.ts', 'procedures.ts', 'sdk.ts', 'http-client.ts'])
         await writeFile(join(cwd, name), await readFile(join(root, 'test/types', name)))
       await writeFile(
         join(cwd, 'tsconfig.json'),
@@ -182,11 +183,12 @@ assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPat
     } else {
       await assert.rejects(access(join(cwd, 'node_modules/@tanstack/query-core')))
       await assert.rejects(access(join(cwd, 'node_modules/react')))
+      await assert.rejects(access(join(cwd, 'node_modules/up-fetch')))
     }
     await writeFile(join(cwd, 'smoke.mjs'), adapter ? adapterSmoke : coreSmoke)
     run(manager === 'npm' ? process.execPath : 'bun', ['smoke.mjs'], cwd)
     console.log(
-      `${manager}: ${adapter ? 'adapter types, QueryClient, one core and HttpError identity' : 'core without TanStack/React'} passed`,
+      `${manager}: ${adapter ? 'adapter types, QueryClient, one core and HttpError identity' : 'core without TanStack/React/up-fetch'} passed`,
     )
   }
 }
@@ -213,7 +215,7 @@ for (const manager of ['npm', 'bun']) {
       : ['install', '--ignore-scripts'],
     cwd,
   )
-  for (const optional of ['react', 'light-sdk-builder-react', 'light-sdk-builder-auth'])
+  for (const optional of ['react', 'light-sdk-builder-react', 'light-sdk-builder-auth', 'up-fetch'])
     await assert.rejects(access(join(cwd, 'node_modules', optional)))
   await writeFile(
     join(cwd, 'query.mjs'),
@@ -250,6 +252,7 @@ for (const manager of ['npm', 'bun']) {
     cwd,
   )
   await assert.rejects(access(join(cwd, 'node_modules/light-sdk-builder-auth')))
+  await assert.rejects(access(join(cwd, 'node_modules/up-fetch')))
   await writeFile(
     join(cwd, 'react.mjs'),
     await readFile(join(root, 'test/react-plugin-fixture.mjs')),

@@ -1,32 +1,31 @@
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
-import { createProcedure, createSdk, createTransport } from 'light-sdk-builder'
+import { createProcedure, createSdk, createHttpTransport } from 'light-sdk-builder'
 import { createSdkContext } from 'light-sdk-builder-react/context'
 import {
-  createTanStackHook,
+  createUseTanStackSdk,
   QueryClient,
   QueryClientProvider,
 } from 'light-sdk-builder-tanstack-query/react'
 
-const transport = createTransport(
-  async () => Response.json({ ready: true }),
-  () => ({ baseUrl: 'https://fixture.invalid' }),
-)
+const transport = createHttpTransport(async () => Response.json({ ready: true }))
 let builds = 0
 const routes = (client) => {
   builds++
   return {
     ping: createProcedure(client)
       .path('ping')
-      .query(({ path, upFetch }) => upFetch(path)),
+      .query(async ({ path, http, signal }) =>
+        (await http(new URL(path, 'https://fixture.invalid'), { signal })).json(),
+      ),
   }
 }
 const backend = createSdk({ routes, transport })
 assert.equal('queryOptions' in backend.ping, false)
 assert.deepEqual(await backend.ping.query(), { ready: true })
 const context = createSdkContext()
-const useApi = createTanStackHook(context.useSdk, routes)
+const useApi = createUseTanStackSdk(context.useSdk, routes)
 const observed = []
 function Screen() {
   observed.push(useApi())

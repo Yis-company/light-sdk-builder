@@ -4,14 +4,14 @@ Connect user-owned auth once. The bridge reads current request credentials, shar
 
 ```ts
 import { createAuthBridge } from 'light-sdk-builder-auth'
-import { createTransport } from 'light-sdk-builder'
+import { createHttpTransport } from 'light-sdk-builder'
 
 const auth = createAuthBridge({
   getRequestContext: () => myAuth.requestContext(),
   recover: (failure) => myAuth.recover(failure),
   subscribe: (changed) => myAuth.subscribe(changed),
 })
-const transport = createTransport(auth.fetch, () => ({ baseUrl }))
+const transport = createHttpTransport(auth.fetch)
 ```
 
 A context supplies `sessionKey`, `revision`, optional `headers` and Fetch `credentials`. Session/revision values must be non-secret. Change the session key on login/logout/account replacement; change revision when credentials rotate within a session. Tokens can be opaque, custom headers or browser-managed cookies. Separate refresh tokens stay private to your auth implementation. The getter may be asynchronous; it must return a consistent current context.

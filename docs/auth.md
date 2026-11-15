@@ -1,6 +1,6 @@
 # User-owned auth
 
-Define auth once in your application or auth library. Connect it to `createAuthBridge`, then inject `bridge.fetch` into a core client or `createTransport`. Authenticate normally; the next SDK request reads current auth without passing tokens to each endpoint or rebuilding the SDK.
+Define auth once in your application or auth library. Connect it to `createAuthBridge`, then inject `bridge.fetch` into a core client or `createHttpTransport`. Authenticate normally; the next SDK request reads current auth without passing tokens to each endpoint or rebuilding the SDK.
 
 The auth source returns a non-secret logical session key, credential revision and optional headers/Fetch credentials. It can represent an API key, bearer token or HttpOnly cookie session. Separate refresh tokens, expiry scheduling, storage, logout, impersonation and navigation remain owned by your auth logic. The SDK never decodes JWT claims or assumes a refresh endpoint.
 

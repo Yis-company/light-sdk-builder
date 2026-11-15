@@ -16,7 +16,7 @@ export function createSdkContext<SDK>() {
 }
 
 /** One SDK per client, shared by hook consumers rather than rebuilding every route in every component. */
-export function createSdkHook<Client extends object, SDK>(
+export function createUseSdk<Client extends object, SDK>(
   useClient: () => Client,
   create: (client: Client) => SDK,
 ) {
