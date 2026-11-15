@@ -1,6 +1,6 @@
 # Beta releases
 
-The repository root is private. `light-sdk-builder` and `light-sdk-builder-tanstack-query` are public packages with independent versions. Both start at **`0.1.0-beta.0`**; no `1.0` release or npm publication is authorized by this setup.
+The repository root is private. Core, auth, React bindings and TanStack Query are public packages with independent versions. Core/TanStack are **`0.1.0-beta.1`**; the new auth/React packages start at **`0.1.0-beta.0`**; no `1.0` release or npm publication is authorized by this setup.
 
 ## Recording changes
 
@@ -49,11 +49,11 @@ Changesets packs with npm. Testing a Bun-only archive does not prove the package
 
 Publishing remains a separate, explicit decision. Confirm:
 
-- npm package names and owner access for both packages.
+- npm package names and owner access for all four packages.
 - repository visibility, intended source visibility, and license/notice contents.
 - supported credentials and publishing runner; npm trusted publishing currently does not support self-hosted runners.
 - actual npm dist-tags and the Changesets publish plan for every beta.
-- installed archive checks and refreshed Platform core compatibility.
+- installed archive checks and refreshed Platform SDK/auth compatibility.
 
 A first unpublished prerelease is planned for the `beta` tag by Changesets. Later prereleases may be planned for `latest` while only beta versions exist. Inspect actual registry state and planned tags every time; do not assume beta versions always stay off `latest` or that artifact mode can override the tag. Do not exit prerelease mode without a separate stable-release decision.
 

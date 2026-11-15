@@ -20,7 +20,7 @@ const releaseDir = args.length ? resolve(root, args[1]) : undefined
 const artifacts = join(root, 'artifacts')
 await mkdir(artifacts, { recursive: true })
 const packages = await Promise.all(
-  ['core', 'tanstack-query'].map(async (directory) => ({
+  ['core', 'auth', 'react', 'tanstack-query'].map(async (directory) => ({
     directory: join(root, 'packages', directory),
     manifest: JSON.parse(await readFile(join(root, 'packages', directory, 'package.json'), 'utf8')),
   })),
@@ -124,6 +124,7 @@ for (const manager of ['npm', 'bun']) {
               '@tanstack/query-core': '5.105.0',
               '@tanstack/react-query': '5.105.0',
               react: '19.3.1',
+              'react-dom': '19.3.1',
               '@types/react': '19.3.0',
               typescript: '5.5.4',
               zod: '4.6.7',
@@ -148,12 +149,17 @@ import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 const consumerCore = import.meta.resolve('light-sdk-builder')
 const adapterCore = import.meta.resolve('light-sdk-builder', import.meta.resolve('light-sdk-builder-tanstack-query'))
+const consumerAuth = import.meta.resolve('light-sdk-builder-auth')
+const reactAuth = import.meta.resolve('light-sdk-builder-auth', import.meta.resolve('light-sdk-builder-react'))
+assert.equal(realpathSync(fileURLToPath(reactAuth)), realpathSync(fileURLToPath(consumerAuth)), 'React and consumer must resolve one auth copy')
 assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPath(consumerCore)), 'Adapter and consumer must resolve one core copy')
 `,
       )
       run(process.execPath, ['--experimental-import-meta-resolve', 'resolve-core.mjs'], cwd)
       await writeFile(join(cwd, 'consumer.ts'), types)
       await writeFile(join(cwd, 'quickstart.ts'), quickstart)
+      for (const name of ['auth.ts', 'procedures.ts'])
+        await writeFile(join(cwd, name), await readFile(join(root, 'test/types', name)))
       await writeFile(
         join(cwd, 'tsconfig.json'),
         JSON.stringify({
@@ -166,7 +172,7 @@ assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPat
             skipLibCheck: true,
             types: [],
           },
-          include: ['consumer.ts', 'quickstart.ts'],
+          include: ['*.ts'],
         }),
       )
       run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json'], cwd)

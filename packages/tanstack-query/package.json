@@ -1,6 +1,6 @@
 {
   "name": "light-sdk-builder-tanstack-query",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "TanStack Query options for light-sdk-builder.",
   "license": "Apache-2.0",
   "repository": {
@@ -31,11 +31,11 @@
   },
   "devDependencies": {
     "@tanstack/query-core": "5.105.0",
-    "light-sdk-builder": "^0.1.0-beta.0"
+    "light-sdk-builder": "^0.1.0-beta.1"
   },
   "peerDependencies": {
     "@tanstack/query-core": "^5.105.0",
-    "light-sdk-builder": "^0.1.0-beta.0"
+    "light-sdk-builder": "^0.1.0-beta.1"
   },
   "engines": {
     "node": ">=22"

@@ -25,3 +25,33 @@ export type {
   Success,
 } from './endpoint.js'
 export type { StandardSchemaV1 } from '@standard-schema/spec'
+
+export { createProcedure, procedureDefinition } from './procedure.js'
+export type {
+  ProcedurePolicy,
+  ProcedureContext,
+  ProcedureDefinition,
+  QueryProcedure,
+  MutationProcedure,
+  InfiniteProcedure,
+  PathSegments,
+} from './procedure.js'
+export {
+  createTransport,
+  scopeTransport,
+  withRequestSignal,
+  up,
+  isJsonifiable,
+  isResponseError,
+  isValidationError,
+  isResponseValidationError,
+  ResponseError,
+  ResponseValidationError,
+} from './transport.js'
+export type {
+  RequestTransport,
+  RequestTransportCall,
+  TransportHeaders,
+  TransportScope,
+  FetcherOptions,
+} from './transport.js'

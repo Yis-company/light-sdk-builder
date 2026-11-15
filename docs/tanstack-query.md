@@ -82,3 +82,18 @@ const options = infiniteQueryOptions({
 ```
 
 Here `sdk.users.list` is an endpoint you define with a response containing `nextOffset`. Return `null` or `undefined` when there are no further pages. Finite and infinite keys are separated to avoid incompatible cached data.
+
+## Add helpers to an existing core SDK
+
+`withTanStack(coreSdk)` returns a facade with `queryOptions` and `mutationOptions` on procedure descriptors. Existing plain `query`/`mutate` methods remain available. Core endpoint bindings also gain query/mutation helpers. Infinite procedures already expose their explicit page/options contract. Apply the adapter once when constructing the SDK; React hooks remain normal TanStack hooks.
+
+```ts
+import { withTanStack, bindAuthToQueryClient } from 'light-sdk-builder-tanstack-query'
+
+const api = withTanStack(coreSdk)
+// useQuery(api.users.queryOptions({ input: { search: 'Ada' } }))
+const disconnect = bindAuthToQueryClient(queryClient, authBridge)
+// Call disconnect when the integration owner unmounts/disposes.
+```
+
+The optional auth binding cancels/removes query data on logical session changes. Credential revision changes preserve cache. Use one bridge per server request and a fresh QueryClient per server request. Mutation side effects, persisted caches and raw streams remain application-owned.

@@ -123,3 +123,25 @@ const user = await operation.call(7)
 An application-owned compatibility adapter can retain its fluent procedure builder, request functions, callbacks, errors, and invalidation policy while replacing only the execution boundary. Existing Platform routes use this approach. Core keeps its import path; the former preview TanStack subpath moves to the [separate plugin](tanstack-query.md).
 
 Uploads, streams, OpenAPI generation, and authentication orchestration are outside this beta's scope.
+
+## Procedures for an existing API
+
+Use a procedure when you already have parsing/error conventions or need arbitrary request composition. Its callback returns the original result or error; a Standard Schema validator is optional.
+
+```ts
+import { createProcedure, createTransport } from 'light-sdk-builder'
+import { z } from 'zod'
+
+const procedure = createProcedure(
+  createTransport(fetch, () => ({ baseUrl: 'https://example.com' })),
+)
+const sdk = {
+  users: procedure
+    .path('users')
+    .input(z.object({ search: z.string() }))
+    .query(({ input, upFetch }) => upFetch('/users', { params: input })),
+}
+await sdk.users.query({ input: { search: 'Ada' } })
+```
+
+Path schemas, transformed inputs, scope policies, custom keys, mutation callbacks and page callbacks use the same builder. `createTransport(auth.fetch)` connects a user-owned [auth source](auth.md) without putting auth logic into procedures.

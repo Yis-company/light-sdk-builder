@@ -3,14 +3,18 @@
 Build a small typed SDK for an existing API, whatever language its backend uses.
 Define HTTP contracts once, validate with any Standard Schema v1 validator, and call them with plain async functions. Add TanStack Query when your application needs it.
 
-This Bun/Turborepo monorepo contains two ESM packages:
+This Bun/Turborepo monorepo contains four ESM packages:
 
 | Package                                                       | Purpose                                                                                   |
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | [`light-sdk-builder`](packages/core)                          | HTTP endpoints, validation, errors, request preparation, and transport-neutral operations |
 | [`light-sdk-builder-tanstack-query`](packages/tanstack-query) | Query, mutation, and infinite-query options for TanStack Query v5                         |
+| [`light-sdk-builder-auth`](packages/auth)                     | User-owned auth sources, recovery and session isolation                                   |
+| [`light-sdk-builder-react`](packages/react)                   | SDK context and React bindings for auth sources                                           |
 
-The first release is **`0.1.0-beta.0`**. Publication is pending; the API may change during beta. Supports Node 22+, Bun, browsers with Fetch/AbortController, and TypeScript 5.5+. Core requires neither React nor a validator implementation.
+Connect authentication once through an application-owned source. React bindings and TanStack Query are optional. See [Auth integration](docs/auth.md).
+
+Core/TanStack are **`0.1.0-beta.1`**; auth/React start at **`0.1.0-beta.0`**. Publication is pending; the API may change during beta. Supports Node 22+, Bun, browsers with Fetch/AbortController, and TypeScript 5.5+. Core requires neither React nor a validator implementation.
 
 ## Quickstart
 
@@ -62,9 +66,9 @@ bunx playwright install chromium
 bun run test:browser
 ```
 
-Turbo orders dependency builds before package tests and TypeScript consumer checks. Task caching is disabled. Package checks install actual npm-packed archives in fresh npm/Bun projects; browser checks use the installed core archive. Release rehearsals also test Changesets-produced archives.
+Turbo orders dependency builds before package tests and TypeScript consumer checks. Task caching is disabled. Package checks install actual npm-packed archives in fresh npm/Bun projects; browser checks use the installed core and React archives. Release rehearsals also test Changesets-produced archives.
 
-To try the unpublished packages locally, run `bun run build` and `bun run test:package`, then install the two `.tgz` files in `artifacts/` together. A core-only consumer needs only the core archive.
+To try the unpublished packages locally, run `bun run build` and `bun run test:package`, then install the `.tgz` files for the packages you use in `artifacts/` together. A core-only consumer needs only the core archive.
 
 Use `bun run changeset` for package changes. Versions are independent; the repository root is private. See the [release guide](docs/releases.md) before changing versions or publishing.
 
