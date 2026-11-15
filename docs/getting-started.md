@@ -2,7 +2,7 @@
 
 `light-sdk-builder` describes an existing HTTP API. The backend can use any language. The application supplies authentication and a Standard Schema v1 validator; core handles request construction, validation, and typed results.
 
-The first `0.1.0-beta.0` release is pending. After publication, install core plus your validator:
+Install core plus your validator:
 
 ```sh
 npm install light-sdk-builder@beta zod

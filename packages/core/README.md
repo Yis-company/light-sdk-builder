@@ -2,7 +2,7 @@
 
 A small ESM SDK builder for existing HTTP APIs. Define endpoints with typed input and status-specific responses, validate through Standard Schema v1, and call them without a framework.
 
-**Beta; publication pending.** After publication:
+**Beta API.** Install with:
 
 ```sh
 npm install light-sdk-builder@beta

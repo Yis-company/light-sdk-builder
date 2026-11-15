@@ -19,7 +19,10 @@
     "changeset": "changeset",
     "version-packages": "changeset version && bun install --lockfile-only --ignore-scripts",
     "release:pack": "changeset pack --out-dir artifacts/release",
-    "release:check": "node scripts/verify-package.mjs --pack-dir artifacts/release"
+    "release:check": "node scripts/verify-package.mjs --pack-dir artifacts/release",
+    "test:release": "node --test test/release-policy.test.mjs",
+    "release:publish": "changeset publish --from-pack-dir artifacts/release",
+    "release:finish": "node scripts/finish-release.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",

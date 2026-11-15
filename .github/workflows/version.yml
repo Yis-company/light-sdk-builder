@@ -9,7 +9,7 @@ permissions:
 jobs:
   version:
     if: github.ref == 'refs/heads/main'
-    runs-on: arc-ci
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write

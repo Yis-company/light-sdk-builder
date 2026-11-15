@@ -14,10 +14,13 @@ function run(command, args, cwd) {
 }
 const args = process.argv.slice(2)
 assert(
-  args.length === 0 || (args.length === 2 && args[0] === '--pack-dir'),
-  'Usage: verify-package.mjs [--pack-dir directory]',
+  args.length === 0 ||
+    (args.length === 1 && args[0] === '--registry') ||
+    (args.length === 2 && args[0] === '--pack-dir'),
+  'Usage: verify-package.mjs [--pack-dir directory | --registry]',
 )
-const releaseDir = args.length ? resolve(root, args[1]) : undefined
+const registry = args[0] === '--registry'
+const releaseDir = args[0] === '--pack-dir' ? resolve(root, args[1]) : undefined
 const artifacts = join(root, 'artifacts')
 await mkdir(artifacts, { recursive: true })
 const packages = await Promise.all(
@@ -47,7 +50,7 @@ if (releaseDir) {
     packed.size > 0,
     'No release archives; Changesets skips versions already on npm. Use test:package for routine CI.',
   )
-} else {
+} else if (!registry) {
   for (const pkg of packages) {
     const result = JSON.parse(
       run(
@@ -285,7 +288,7 @@ const report = {
   archives: Object.fromEntries(packed),
   dependencies,
   fixture,
-  mode: releaseDir ? 'release' : 'ci',
+  mode: registry ? 'registry' : releaseDir ? 'release' : 'ci',
 }
 await writeFile(join(artifacts, 'package-check.json'), JSON.stringify(report, null, 2))
 console.log(JSON.stringify(report))

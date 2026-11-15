@@ -4,7 +4,7 @@ The adapter is a separate ESM package. Core also supports direct async calls; us
 
 ## Install and migrate
 
-Publication of `0.1.0-beta.0` is pending. After publication:
+Install the beta:
 
 ```sh
 npm install light-sdk-builder@beta light-sdk-builder-tanstack-query@beta @tanstack/query-core

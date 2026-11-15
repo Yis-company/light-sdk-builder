@@ -2,7 +2,7 @@
 
 TanStack Query v5 options for `light-sdk-builder` endpoints. Works with Query Core and its framework adapters; React is not required by this package.
 
-**Beta; publication pending.** After publication:
+**Beta API.** Install with:
 
 ```sh
 npm install light-sdk-builder@beta light-sdk-builder-tanstack-query@beta @tanstack/query-core

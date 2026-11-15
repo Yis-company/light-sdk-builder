@@ -1,64 +1,67 @@
 # Beta releases
 
-The repository root is private. Core, auth, React bindings and TanStack Query are public packages with independent versions. Core/TanStack are **`0.1.0-beta.2`**, React is **`0.1.0-beta.1`**, and auth is **`0.1.0-beta.0`**; no `1.0` release or npm publication is authorized by this setup.
+Changesets v3 manages independent versions for five public packages: core, TanStack Query, auth, React bindings and the opt-in lint plugin. The workspace root remains `private: true` and is never published. The initial package versions are core/TanStack `0.1.0-beta.4`, React `0.1.0-beta.2`, and auth/lint `0.1.0-beta.0`. Do not reset unpublished package versions or repeat the original bootstrap.
 
-## Recording changes
+## Record and version changes
 
-```sh
-bun run changeset
-```
+Run `bun run changeset` for consumer-visible package changes. Commit the selected packages and release notes. `.changeset/pre.json` keeps the repository in `beta` mode. `bun run version-packages` updates versions, changelogs, internal peer/dev ranges and `bun.lock`.
 
-Select affected packages and describe the consumer-visible change. Beta mode is recorded in `.changeset/pre.json`. The initial unpublished packages were bootstrapped at `0.0.0`; a minor changeset in beta mode produces `0.1.0-beta.0`. Do not repeat that bootstrap after publication.
+The **Version packages** workflow runs on GitHub-hosted Ubuntu after a push to `main`, or through manual dispatch. Changesets creates/updates a draft version PR when changesets are pending. Its scoped token can write contents and PRs; the workflow explicitly dispatches Check for token-generated commits. Review and merge that PR only after its Node 22/24/26 matrix passes. The version workflow cannot publish npm packages.
 
-For subsequent versions:
+Core is a peer and local development dependency of the TanStack package. Published manifests use ordinary semver ranges, never `workspace:`. All enabled releases remain below 1.0 and use a `-beta.N` version.
 
-```sh
-bun run version-packages
-```
+## Verification and exact artifacts
 
-Review package versions, changelogs, plugin peer/dev ranges, and `bun.lock`. Core is a plugin peer plus a local development dependency. Published manifests use ordinary semver ranges, never `workspace:`. Check that the planned versions stay below `1.0.0`.
-
-The version workflow creates or updates a version PR with scoped contents, pull-request, and actions write permissions. It explicitly dispatches Check for the generated head, since token-created commits may not trigger normal PR workflows. Confirm the Node 22/24/26 matrix is green for that exact head before merging. The workflow does not publish packages.
-
-## Verify artifacts
-
-Routine CI always uses per-package `npm pack`, including between releases when a version is already published:
+Routine PR/main CI always checks npm-packed archives, including between releases:
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
+bun run format:check
 bun run check
+bun run test:release
 bun run test:package
 bunx playwright install chromium
 bun run test:browser
 ```
 
-The installed-package checks use fresh npm/Bun projects, compile public declarations, exercise core-only and React Query consumers, and check that core is shared and `HttpError` identity holds. Package contents must include compiled code, declarations, LICENSE, NOTICE, and README without workspace-only dependency values.
+Fresh npm/Bun consumers check declarations, optional dependencies, reusable SDK definitions, HTTP/error identity and installed ESLint/Oxlint integration. Runtime archives contain compiled JS/declarations, README, LICENSE and NOTICE. The lint plugin ships its standalone JS source without runtime dependencies.
 
-Before a release, rehearse the actual Changesets artifacts too:
+The publishing job uses Changesets' actual artifacts:
 
 ```sh
+bun run build
 bun run release:pack
+node scripts/release-policy.mjs
 bun run release:check
+bun run test:browser
 ```
 
-`release:pack` runs `changeset pack --out-dir artifacts/release`. This consults npm and packs only unpublished versions. The verifier reads the generated publish plan and tests only its listed archives. If only one package changes, it installs the unchanged package from the registry at its exact version. `release:check` runs the same installed-consumer checks against that output. Inspect the publish plan and artifact manifests, including public access and dependency ranges.
+`release:pack` queries npm and packs only unpublished versions. `release:check` tests the archives listed in `artifacts/release/publish-plan.json`, installing unchanged dependencies from their exact registry versions. A tag-only recovery plan contains no new archives and skips the consumer/browser artifact checks. Routine CI still runs between releases.
 
-Changesets packs with npm. Testing a Bun-only archive does not prove the package Changesets will publish. Eventual publication must send the tested archives with `changeset publish --from-pack-dir artifacts/release`; artifact mode rejects `--tag`.
+## Hosted publication
 
-## Publication gates
+**Publish beta packages** runs after a successful Check push on `main`, or by manual dispatch on `main`. It rejects fork/PR triggers and requires the public repository's current main SHA plus successful Node 22/24/26 jobs. Publication is serialized; stale main runs skip publishing.
 
-Publishing remains a separate, explicit decision. Confirm:
+The job builds, packs, validates and tests before `changesets/action/publish@v2.1.2` runs `bun run release:publish`. That command uses `changeset publish --from-pack-dir artifacts/release`, so it publishes the exact tested tarballs, not a second pack. Npm provenance is enabled. The Changesets action pushes package tags and creates GitHub prereleases from changelogs. The finishing step verifies npm versions, the `beta` tag and provenance, then attaches each verified archive to its GitHub release.
 
-- npm package names and owner access for all four packages.
-- repository visibility, intended source visibility, and license/notice contents.
-- supported credentials and publishing runner; npm trusted publishing currently does not support self-hosted runners.
-- actual npm dist-tags and the Changesets publish plan for every beta.
-- installed archive checks and refreshed Platform SDK/auth compatibility.
+Changesets may plan later betas for `latest` when only prereleases exist. The finishing step also advances `beta`, preserving documented `package@beta` installs. First publication can establish `latest` too. Inspect actual dist-tags after publishing; a beta version is not a stable release.
 
-A first unpublished prerelease is planned for the `beta` tag by Changesets. Later prereleases may be planned for `latest` while only beta versions exist. Inspect actual registry state and planned tags every time; do not assume beta versions always stay off `latest` or that artifact mode can override the tag. Do not exit prerelease mode without a separate stable-release decision.
+Already-published versions are skipped by Changesets. A partial failure must be investigated, then the same main release may be rerun; do not bump versions simply to retry authentication or metadata operations. Published versions are immutable.
 
-## Rollback
+## npm authentication
 
-Published npm versions are immutable. Preserve the previous known-good version and archive. Consumers can pin or reinstall that exact version; Platform can restore its previous vendored core archive and lockfile together. A maintainer can correct dist-tags after reviewing registry state, but that does not change already-installed versions. Fix a bad beta with a new Changeset and beta version.
+The first publication needs an npm account authorized to create/publish the five unscoped package names. Supply a granular publishing token with the needed package permissions and bypass 2FA through the secure credential flow. Store it only as the repository Actions secret `NPM_TOKEN`. No token belongs in Git, logs or a committed `.npmrc`.
 
-References: [Changesets prereleases](https://changesets.dev/guide/prereleases), [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+The hosted publication job has `id-token: write` and npm 12.2.0, ready for npm trusted publishing. After the packages exist, configure each package's trusted publisher to **Yis-company/light-sdk-builder**, workflow **release.yml**, GitHub Actions. Enable npm dist-tag access as well, since later betas may need the finishing step to advance the beta tag. Verify OIDC publishing before removing the bootstrap secret or disallowing token access. No trusted publisher is assumed to exist merely because the workflow has an OIDC permission.
+
+Use manual **Publish beta packages** dispatch after configuration changes or to retry a verified main release. GitHub Packages is a different registry and is not required for public npm installs.
+
+## Acceptance and rollback
+
+Verify all five registry versions, beta tags, provenance and GitHub release assets. Install the published versions in fresh npm/Bun consumers and refresh Platform's exact registry dependencies. The Platform spike remains a draft; publishing the SDK does not authorize deploying Platform.
+
+A known Bun/up-fetch multipart serialization limitation is independent of SDK binding; document it and use a suitable client/runtime for uploads. Mocked HTTP compatibility checks are not live backend acceptance.
+
+Consumers can pin a prior known-good npm version. Correct a faulty beta with a new Changeset/version; changing a dist-tag does not change existing installations. Keep prior archives for rollback. A stable release requires a separate policy decision and changes to the beta-only publish guard.
+
+References: [Changesets automation](https://changesets.dev/guide/automating), [Changesets prereleases](https://changesets.dev/guide/prereleases), [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).

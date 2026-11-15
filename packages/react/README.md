@@ -8,6 +8,6 @@ Pass your existing auth context through `AuthSource` getters, optional recovery 
 
 TanStack remains a separate package. Wire `bindAuthToQueryClient(queryClient, bridge)` to remove old-session query data on logical session changes; credential rotation preserves cache. Scope/client changes should create a new scoped transport. Server clients and auth sources are request-local.
 
-Beta; publication pending. React19.3.1+, TypeScript5.5+, ESM. Core/TanStack are not imported by these React bindings. Apache-2.0; see LICENSE/NOTICE.
+Beta API. React19.3.1+, TypeScript5.5+, ESM. Core/TanStack are not imported by these React bindings. Apache-2.0; see LICENSE/NOTICE.
 
 For SDK context and hook sharing without authentication, import from `light-sdk-builder-react/context`; this entry requires only React. Auth hooks are available from `/auth` or the backward-compatible main entry and require `light-sdk-builder-auth`.

@@ -22,4 +22,4 @@ A context supplies `sessionKey`, `revision`, optional `headers` and Fetch `crede
 
 Decoded JSON/text/blob/buffer/FormData/bytes responses reject after a session replacement. Raw response stream readers remain caller-managed. JSON/FormData/Blob and reusable bodies can replay; consumed Request bodies and ReadableStream requests do not replay. Explicit public requests use a separate unauthenticated transport. Create one bridge per server request; do not share credentials across requests.
 
-Beta; publication pending. Node22+, Bun and Fetch browsers. No React dependency. Apache-2.0; see LICENSE/NOTICE.
+Beta API. Node22+, Bun and Fetch browsers. No React dependency. Apache-2.0; see LICENSE/NOTICE.
