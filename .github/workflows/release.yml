@@ -39,9 +39,7 @@ jobs:
         with:
           script: |
             const { pathToFileURL } = require('node:url')
-            const policy = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/release-policy.mjs`).href)
             const repository = `${context.repo.owner}/${context.repo.repo}`
-            if (!policy.trustedReleaseEvent(context.eventName, context.payload, repository, context.ref)) throw new Error('Untrusted release trigger')
             const sha = context.payload.workflow_run?.head_sha || context.sha
             const { data: repo } = await github.rest.repos.get(context.repo)
             const { data: branch } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' })
@@ -49,6 +47,8 @@ jobs:
               core.notice('Publication skipped: source must be public and match current main')
               return
             }
+            const policy = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/release-policy.mjs`).href)
+            if (!policy.trustedReleaseEvent(context.eventName, context.payload, repository, context.ref)) throw new Error('Untrusted release trigger')
             const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'check.yml', head_sha: sha, per_page: 30 })
             const run = runs.find(run => ['push', 'workflow_dispatch'].includes(run.event) && run.head_branch === 'main' && run.conclusion === 'success')
             const jobs = run ? await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: run.id, filter: 'latest', per_page: 100 }) : []
