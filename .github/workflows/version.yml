@@ -1,0 +1,50 @@
+name: Version packages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+permissions:
+  contents: read
+jobs:
+  version:
+    if: github.ref == 'refs/heads/main'
+    runs-on: arc-ci
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - uses: changesets/action/select-mode@v2.1.2
+        id: mode
+      - uses: changesets/action/version@v2.1.2
+        id: version
+        if: steps.mode.outputs.mode == 'version'
+        with:
+          script: bun run version-packages
+          pr-title: Version beta packages
+          pr-draft: create
+      - uses: actions/github-script@v8
+        if: steps.version.outputs.pr-number
+        env:
+          VERSION_PR: ${{ steps.version.outputs.pr-number }}
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: Number(process.env.VERSION_PR),
+            })
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: 'check.yml',
+              ref: pr.head.ref,
+            })
+            core.notice(`Dispatched Check for ${pr.head.sha}; verify all three Node jobs before merging.`)
