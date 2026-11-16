@@ -2,7 +2,15 @@
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [],
+  "fixed": [
+    [
+      "light-sdk-builder",
+      "light-sdk-builder-auth",
+      "light-sdk-builder-react",
+      "light-sdk-builder-tanstack-query",
+      "eslint-plugin-light-sdk-builder"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
