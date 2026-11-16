@@ -167,3 +167,15 @@ useMutation(
     },
   }),
 )
+
+// A result without a schema is unknown until the caller types it.
+const untyped = p.path('raw').query(async ({ http, path }) => (await http(path)).json())
+const untypedResult = await untyped.query()
+// @ts-expect-error unknown results must be narrowed before use
+untypedResult.name
+const typed = p.path('typed').query(async () => ({ name: 'Ada' }))
+;(await typed.query()).name satisfies string
+// A base key filter may omit the input; a query key may not.
+core.get.baseKey()
+// @ts-expect-error a query key needs its input
+core.get.queryKey()

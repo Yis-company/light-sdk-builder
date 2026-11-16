@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { z } from 'zod'
-import { createProcedure, createHttpTransport } from '../dist/index.js'
+import { createProcedure, createHttpTransport, issuePath, ValidationError } from '../dist/index.js'
 import { isResponseError } from 'up-fetch'
 import { userHttp } from '../../../test/user-http.mjs'
 
@@ -167,7 +167,7 @@ test('structural path transforms can declare raw key segments independently from
       (raw) => ['users', raw],
     )
     .query(({ path, http }) => http(path))
-  assert.deepEqual(get.queryKey({ path: '7' }), ['users', '7'])
+  assert.deepEqual(get.queryKey({ path: '7' }), ['users', '7', {}])
   assert.deepEqual(await get.query({ path: '7' }), { url: 'https://sdk.invalid/users/7' })
   const missingRawBuilder = p.path(schema, (value) => ['users', value.id]).query(async () => null)
   assert.throws(() => missingRawBuilder.queryKey({ path: '7' }), /raw key builder/)
@@ -193,8 +193,8 @@ test('user context can choose a different client without changing the shared tra
   await custom.query()
   await plain.query()
   assert.deepEqual(requests, ['chosen', null])
-  assert.deepEqual(custom.queryKey(), ['users', 'chosen'])
-  assert.deepEqual(plain.queryKey(), ['users'])
+  assert.deepEqual(custom.queryKey(), ['users', {}, 'chosen'])
+  assert.deepEqual(plain.queryKey(), ['users', {}])
 })
 
 test('plain fetch remains a fetch client with native responses and explicit cancellation', async () => {
@@ -275,4 +275,35 @@ test('context layers compose once while raw keys stay synchronous', async () => 
     result: 'done',
   })
   assert.equal(calls, 2)
+})
+
+test('rejected input throws a typed ValidationError naming each field, before any request', async () => {
+  const seen = []
+  const p = createProcedure(transport(async (request) => (seen.push(request), Response.json({}))))
+  const create = p
+    .path('loads')
+    .input(z.object({ drops: z.array(z.object({ reference: z.string() })) }))
+    .mutation(({ path, input, http }) => http(path, { method: 'POST', body: input }))
+  await assert.rejects(create.mutate({ input: { drops: [{ reference: 7 }] } }), (error) => {
+    assert(error instanceof ValidationError)
+    assert.equal(error.kind, 'input')
+    assert.deepEqual(error.issues.map(issuePath), ['drops.0.reference'])
+    assert.match(error.message, /^Input validation failed: drops\.0\.reference: /)
+    return true
+  })
+  assert.equal(seen.length, 0)
+})
+
+test('keys always end their path with an input slot; a base key without input matches every input', () => {
+  const p = createProcedure(transport(async () => Response.json({})))
+  const list = p.path('users').query(async () => null)
+  const search = p
+    .path('users')
+    .input(z.object({ q: z.string() }))
+    .query(async () => null)
+  const member = p.path('users', 'me').query(async () => null)
+  assert.deepEqual(list.queryKey(), ['users', {}])
+  assert.deepEqual(member.queryKey(), ['users', 'me', {}])
+  assert.deepEqual(search.queryKey({ input: { q: 'a' } }), ['users', { q: 'a' }])
+  assert.deepEqual(search.baseKey(), ['users', {}])
 })

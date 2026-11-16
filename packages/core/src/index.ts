@@ -1,4 +1,4 @@
-export { createOperation, validateSchema, ValidationError } from './operation.js'
+export { createOperation, issuePath, validateSchema, ValidationError } from './operation.js'
 export type { CallOptions, OperationConfig } from './operation.js'
 export {
   endpoint,

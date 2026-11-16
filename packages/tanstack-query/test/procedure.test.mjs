@@ -64,7 +64,7 @@ test('one SDK plugin registration enriches every agnostic procedure and retains 
     assert.equal((await client.fetchQuery(options)).ready, true)
     const initial = await client.fetchInfiniteQuery(api.pages.queryOptions())
     assert.equal(initial.pages[0].page, 1)
-    assert.deepEqual(api.pages.queryKey(), ['pages', { team: 7 }, 'infinite'])
+    assert.deepEqual(api.pages.queryKey(), ['pages', {}, { team: 7 }, 'infinite'])
   } finally {
     client.clear()
   }
@@ -179,4 +179,34 @@ test('reusable definitions bind before plugins and keep separate instance caches
   } finally {
     client.clear()
   }
+})
+
+test('a base key filter reaches every input and scope of its path, never longer paths', () => {
+  const request = userHttp(async () => Response.json({}))
+  const scoped = (team) => createProcedure(request, { keyContext: () => [{ team }] })
+  const route = (p) => ({
+    search: p
+      .path('users')
+      .input(z.object({ q: z.string() }))
+      .query(async () => null),
+    me: p.path('users', 'me').query(async () => null),
+  })
+  const [seven, nine] = [route(scoped(7)), route(scoped(9))]
+  const client = new QueryClient()
+  for (const [key, data] of [
+    [seven.search.queryKey({ input: { q: 'a' } }), 'a7'],
+    [nine.search.queryKey({ input: { q: 'b' } }), 'b9'],
+    [seven.me.queryKey(), 'me'],
+  ])
+    client.setQueryData(key, data)
+  const matched = (queryKey) =>
+    client
+      .getQueryCache()
+      .findAll({ queryKey })
+      .map((query) => query.state.data)
+      .sort()
+  assert.deepEqual(matched(seven.search.baseKey()), ['a7', 'b9'])
+  assert.deepEqual(matched(seven.search.baseKey({ input: { q: 'a' } })), ['a7'])
+  assert.deepEqual(matched(seven.me.baseKey()), ['me'])
+  client.clear()
 })

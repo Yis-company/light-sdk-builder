@@ -26,6 +26,13 @@ export function createOperation<A, C, O>(config: OperationConfig<A, C, O>) {
   }
 }
 
+/** The field an issue is about, such as `drops.0.reference`; empty for the value itself. */
+export const issuePath = (issue: StandardSchemaV1.Issue): string =>
+  (issue.path ?? [])
+    .map((segment) => String(typeof segment === 'object' ? segment.key : segment))
+    .join('.')
+
+/** A schema rejected input (no request was sent) or a response. */
 export class ValidationError extends Error {
   readonly name = 'ValidationError'
   constructor(
@@ -33,7 +40,9 @@ export class ValidationError extends Error {
     readonly issues: ReadonlyArray<StandardSchemaV1.Issue>,
   ) {
     super(
-      `${kind === 'input' ? 'Input' : 'Response'} validation failed: ${issues.map((issue) => issue.message).join(', ')}`,
+      `${kind === 'input' ? 'Input' : 'Response'} validation failed: ${issues
+        .map((issue) => [issuePath(issue), issue.message].filter(Boolean).join(': '))
+        .join(', ')}`,
     )
   }
 }
