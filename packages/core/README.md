@@ -2,7 +2,7 @@
 
 A small ESM SDK builder for existing HTTP APIs. Define endpoints with typed input and status-specific responses, validate through Standard Schema v1, and call them without a framework.
 
-**Beta: `0.1.0-beta.0`; publication pending.** After publication:
+**Beta API.** Install with:
 
 ```sh
 npm install light-sdk-builder@beta
@@ -24,7 +24,13 @@ const data = unwrap(await ping.call())
 
 Supports Node 22+, Bun, browsers with Fetch/AbortController, and TypeScript 5.5+. React and TanStack are optional separate dependencies of consumers using an adapter. A validator implementation is supplied by the application.
 
-Exports include `endpoint`, `createClient`, `createOperation`, `validateSchema`, `serializeQuery`, `captureInput`, `unwrap`, error classes, and their public types. `captureInput` copies plain JSON inputs and rejects values whose JSON representation would lose information; adapters can use it to preserve request snapshots.
+Prefer `createSdkBuilder<Http>()` and its reusable `procedure` helper for multi-module SDKs. Bind the exported definitions once per instance with `sdk.create({ http, routes, plugins })`; shared definitions contain no runtime client. See [reusable authoring](https://github.com/Yis-company/light-sdk-builder/blob/main/docs/reusable-procedures.md).
+
+For low-level callback-based APIs, `createProcedure(createHttpTransport(fetch))` supplies typed path/input builders, application-defined request context and plain async methods. The callback receives your original HTTP client as `http`, preserving its types, results and errors. Native fetch, up-fetch and custom clients are application choices. Inject an auth bridge fetch function to connect existing auth logic.
+
+Initialize with `createSdk({ routes, transport })`. Optional plugins register at initialization; routes stay framework-neutral.
+
+Exports include `createSdkBuilder`, `createSdk`, `defineSdkPlugin`, `createProcedure`, `createHttpTransport`, `endpoint`, `createClient`, `createOperation`, `validateSchema`, `serializeQuery`, `captureInput`, `unwrap`, error classes, and their public types. `captureInput` copies plain JSON inputs and rejects values whose JSON representation would lose information; adapters can use it to preserve request snapshots.
 
 - [Getting started and API behavior](https://github.com/Yis-company/light-sdk-builder/blob/main/docs/getting-started.md)
 - [Optional TanStack Query package](https://github.com/Yis-company/light-sdk-builder/blob/main/docs/tanstack-query.md)

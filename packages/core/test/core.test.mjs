@@ -97,10 +97,10 @@ test('empty path parameters stop before HTTP while zero remains a valid item ID'
   assert.equal(f.requests[0].url, 'https://api.example/v1/users/0')
 })
 
-test('captured headers, scope, body and keys cannot drift after preparation', async () => {
-  const scope = { key: [{ workspace: 7 }], headers: { 'X-Workspace': '7' } }
-  const headers = { Authorization: 'Bearer fixture-secret' }
-  const f = fixture({ id: '1', name: 'Ada' }, 200, { scope, headers })
+test('captured headers, key context, body and keys cannot drift after preparation', async () => {
+  const keyContext = [{ workspace: 7 }]
+  const headers = { Authorization: 'Bearer fixture-secret', 'X-Workspace': '7' }
+  const f = fixture({ id: '1', name: 'Ada' }, 200, { keyContext, headers })
   const post = endpoint({
     name: 'users.create',
     method: 'POST',
@@ -112,8 +112,8 @@ test('captured headers, scope, body and keys cannot drift after preparation', as
   const rawKey = post.key(args)
   const prepared = await post.prepare(args)
   args.body.name = 'Mina'
-  scope.key[0].workspace = 9
-  scope.headers['X-Workspace'] = '9'
+  keyContext[0].workspace = 9
+  headers['X-Workspace'] = '9'
   headers.Authorization = 'changed'
   await prepared.call()
   assert.equal(f.requests[0].headers['x-workspace'], '7')
@@ -126,18 +126,16 @@ test('captured headers, scope, body and keys cannot drift after preparation', as
   }, TypeError)
 })
 
-test('different base URLs and scopes never share raw keys', () => {
+test('different base URLs and key contexts never share raw keys', () => {
   const args = { params: { id: 1 } }
   const a = get
-    .bind(fixture(undefined, 200, { namespace: 'shared', scope: { key: [7] } }).client)
+    .bind(fixture(undefined, 200, { namespace: 'shared', keyContext: [7] }).client)
     .key(args)
   const b = get
-    .bind(fixture(undefined, 200, { namespace: 'shared', scope: { key: [9] } }).client)
+    .bind(fixture(undefined, 200, { namespace: 'shared', keyContext: [9] }).client)
     .key(args)
   const c = get
-    .bind(
-      createClient({ baseUrl: 'https://other.example', namespace: 'shared', scope: { key: [7] } }),
-    )
+    .bind(createClient({ baseUrl: 'https://other.example', namespace: 'shared', keyContext: [7] }))
     .key(args)
   assert.notDeepEqual(a, b)
   assert.notDeepEqual(a, c)

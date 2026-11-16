@@ -1,0 +1,55 @@
+{
+  "name": "light-sdk-builder-react",
+  "version": "0.1.0-beta.2",
+  "description": "Optional React bindings for light-sdk-builder.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yis-company/light-sdk-builder.git",
+    "directory": "packages/react"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "import": "./dist/context.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "light-sdk-builder-auth": "^0.1.0-beta.0"
+  },
+  "peerDependencies": {
+    "light-sdk-builder-auth": "^0.1.0-beta.0",
+    "react": "^19.3.1"
+  },
+  "peerDependenciesMeta": {
+    "light-sdk-builder-auth": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

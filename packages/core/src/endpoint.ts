@@ -45,14 +45,14 @@ export type ClientOptions = {
   namespace?: string
   fetch?: typeof fetch
   headers?: HeadersInit
-  scope?: { key: CacheKey; headers?: HeadersInit }
+  keyContext?: CacheKey
 }
 export type Client = {
   readonly baseUrl: string
   readonly namespace: string
   readonly fetch: typeof fetch
   readonly headers: ReadonlyArray<readonly [string, string]>
-  readonly scopeKey: CacheKey
+  readonly keyContext: CacheKey
 }
 
 export class RequestError extends Error {
@@ -144,13 +144,12 @@ export function createClient(options: ClientOptions): Client {
     throw new RequestError('baseUrl must be an HTTP(S) URL without credentials, query, or fragment')
   }
   const headers = new Headers(options.headers)
-  for (const [name, value] of new Headers(options.scope?.headers)) headers.set(name, value)
   return Object.freeze({
     baseUrl: url.href.replace(/\/+$/, ''),
     namespace: options.namespace ?? url.href.replace(/\/+$/, ''),
     fetch: options.fetch ?? globalThis.fetch,
     headers: Object.freeze([...headers].map((entry) => Object.freeze(entry))),
-    scopeKey: key(...(options.scope?.key ?? [])),
+    keyContext: key(...(options.keyContext ?? [])),
   })
 }
 
@@ -233,7 +232,7 @@ export function endpoint<
           url,
           body,
           headers,
-          key: key(client.namespace, name, ...client.scopeKey, 'prepared', {
+          key: key(client.namespace, name, ...client.keyContext, 'prepared', {
             method: method,
             url,
             body: body ?? null,
@@ -279,7 +278,7 @@ export function endpoint<
       })
       return {
         key: (input: Input<S>) =>
-          key(client.namespace, name, ...client.scopeKey, 'input', {
+          key(client.namespace, name, ...client.keyContext, 'input', {
             method: method,
             baseUrl: client.baseUrl,
             path: template,

@@ -64,6 +64,53 @@ try {
     }
   }
   assert.deepEqual(localeKeys[0], localeKeys[1], 'Prepared keys must match across browser locales')
+  const reactFixture = join(report.fixture, 'npm-adapter')
+  await writeFile(
+    join(reactFixture, 'react-browser-fixture.mjs'),
+    await readFile(join(root, 'test/react-browser-fixture.mjs')),
+  )
+  const reactBuild = spawnSync(
+    'bun',
+    ['build', 'react-browser-fixture.mjs', '--target=browser', '--outfile=react-browser.js'],
+    { cwd: reactFixture, encoding: 'utf8' },
+  )
+  assert.equal(reactBuild.status, 0, reactBuild.stdout + reactBuild.stderr)
+  const reactBundle = await readFile(join(reactFixture, 'react-browser.js'), 'utf8')
+  await writeFile(
+    join(reactFixture, 'react.html'),
+    `<!doctype html><html><div id="root"></div><script>${reactBundle.replaceAll('</script', '<\\/script')}</script></html>`,
+  )
+  const page = await browser.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(pathToFileURL(join(reactFixture, 'react.html')).href)
+  await page.waitForFunction(() => window.reactAuth?.snapshot.sessionKey === 'a')
+  await page.evaluate(() => window.reactAuth.switchSource())
+  await page.waitForFunction(
+    () =>
+      window.reactAuth.snapshot.sessionKey === 'b' &&
+      window.reactAuth.listenersA.size === 0 &&
+      window.reactAuth.listenersB.size === 1,
+  )
+  await page.evaluate(() => window.reactAuth.changeB())
+  await page.waitForFunction(() => window.reactAuth.snapshot.sessionKey === 'c')
+  await page.evaluate(() => window.reactAuth.async())
+  await page.waitForFunction(() => window.reactAuth.asyncMode)
+  await page.evaluate(() => {
+    window.authRead = window.reactAuth.bridge.fetch('https://fixture.invalid').then(
+      (r) => r.status,
+      (e) => e.name,
+    )
+  })
+  await page.evaluate(() => window.reactAuth.rerender())
+  await page.waitForFunction(() => window.reactAuth.render > 0)
+  await page.evaluate(() => window.reactAuth.release())
+  assert.equal(await page.evaluate(() => window.authRead), 200)
+  assert.deepEqual(errors, [])
+  await page.close()
+  console.log(
+    'Installed React bindings passed StrictMode source switching and inline-source async reads',
+  )
   console.log(
     'Installed core passed native/default fetch, cross-locale keys, scoped requests and cancellation without TanStack or live HTTP',
   )

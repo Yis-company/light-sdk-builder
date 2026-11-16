@@ -1,3 +1,4 @@
+import { verifyLintPackage } from './verify-lint-package.mjs'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, readFile, writeFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,14 +14,17 @@ function run(command, args, cwd) {
 }
 const args = process.argv.slice(2)
 assert(
-  args.length === 0 || (args.length === 2 && args[0] === '--pack-dir'),
-  'Usage: verify-package.mjs [--pack-dir directory]',
+  args.length === 0 ||
+    (args.length === 1 && args[0] === '--registry') ||
+    (args.length === 2 && args[0] === '--pack-dir'),
+  'Usage: verify-package.mjs [--pack-dir directory | --registry]',
 )
-const releaseDir = args.length ? resolve(root, args[1]) : undefined
+const registry = args[0] === '--registry'
+const releaseDir = args[0] === '--pack-dir' ? resolve(root, args[1]) : undefined
 const artifacts = join(root, 'artifacts')
 await mkdir(artifacts, { recursive: true })
 const packages = await Promise.all(
-  ['core', 'tanstack-query'].map(async (directory) => ({
+  ['core', 'auth', 'react', 'tanstack-query', 'eslint-plugin'].map(async (directory) => ({
     directory: join(root, 'packages', directory),
     manifest: JSON.parse(await readFile(join(root, 'packages', directory, 'package.json'), 'utf8')),
   })),
@@ -46,7 +50,7 @@ if (releaseDir) {
     packed.size > 0,
     'No release archives; Changesets skips versions already on npm. Use test:package for routine CI.',
   )
-} else {
+} else if (!registry) {
   for (const pkg of packages) {
     const result = JSON.parse(
       run(
@@ -71,6 +75,25 @@ for (const { manifest: local } of packages) {
     !JSON.stringify(manifest).includes('workspace:'),
     'Published manifests must use npm-compatible ranges',
   )
+  if (local.name === 'eslint-plugin-light-sdk-builder') {
+    assert.equal(manifest.exports['.'], './src/index.js')
+    assert.deepEqual(
+      manifest.dependencies ?? {},
+      {},
+      'Lint must not introduce runtime dependencies',
+    )
+    assert.deepEqual(
+      manifest.peerDependencies ?? {},
+      {},
+      'Installing lint must not force SDK or framework dependencies',
+    )
+    const files = run('tar', ['-tzf', archive], root).trim().split('\n')
+    for (const path of ['src/index.js', 'LICENSE', 'NOTICE', 'README.md'])
+      assert(files.includes(`package/${path}`))
+    assert(files.every((file) => !file.startsWith('package/test/')))
+    assert.equal(manifest.license, 'Apache-2.0')
+    continue
+  }
   assert.equal(manifest.exports['.'].types, './dist/index.d.ts')
   assert.equal(manifest.exports['.'].import, './dist/index.js')
   const files = run('tar', ['-tzf', archive], root).trim().split('\n')
@@ -83,11 +106,14 @@ for (const { manifest: local } of packages) {
 const fixture = await mkdtemp(join(tmpdir(), 'light-sdk-builder-package-'))
 const coreSmoke = `
 import assert from 'node:assert/strict'
-import { endpoint, createClient } from 'light-sdk-builder'
+import { endpoint, createClient, createSdk } from 'light-sdk-builder'
 const schema = { '~standard': { version: 1, vendor: 'fixture', validate: value => ({ value }) } }
 const api = endpoint({ name: 'ping', method: 'GET', path: '/ping', responses: { 200: schema } })
 const result = await api.bind(createClient({ baseUrl: 'https://fixture.invalid', fetch: async () => Response.json({ ready: true }) })).call()
 assert.equal(result.data.ready, true)
+const sdk = createSdk({ routes: client => ({ ping: api.bind(client) }), transport: createClient({ baseUrl: 'https://fixture.invalid', fetch: async () => Response.json({ ready: true }) }) })
+assert.equal((await sdk.ping.call()).data.ready, true)
+assert.equal('queryOptions' in sdk.ping, false)
 `
 const adapterSmoke = `
 import assert from 'node:assert/strict'
@@ -124,10 +150,12 @@ for (const manager of ['npm', 'bun']) {
               '@tanstack/query-core': '5.105.0',
               '@tanstack/react-query': '5.105.0',
               react: '19.3.1',
+              'react-dom': '19.3.1',
               '@types/react': '19.3.0',
               typescript: '5.5.4',
               zod: '4.6.7',
               valibot: '1.5.0',
+              'up-fetch': '2.6.1',
             }
           : { 'light-sdk-builder': dependencies['light-sdk-builder'] },
       }),
@@ -148,12 +176,17 @@ import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 const consumerCore = import.meta.resolve('light-sdk-builder')
 const adapterCore = import.meta.resolve('light-sdk-builder', import.meta.resolve('light-sdk-builder-tanstack-query'))
+const consumerAuth = import.meta.resolve('light-sdk-builder-auth')
+const reactAuth = import.meta.resolve('light-sdk-builder-auth', import.meta.resolve('light-sdk-builder-react'))
+assert.equal(realpathSync(fileURLToPath(reactAuth)), realpathSync(fileURLToPath(consumerAuth)), 'React and consumer must resolve one auth copy')
 assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPath(consumerCore)), 'Adapter and consumer must resolve one core copy')
 `,
       )
       run(process.execPath, ['--experimental-import-meta-resolve', 'resolve-core.mjs'], cwd)
       await writeFile(join(cwd, 'consumer.ts'), types)
       await writeFile(join(cwd, 'quickstart.ts'), quickstart)
+      for (const name of ['auth.ts', 'procedures.ts', 'sdk.ts', 'http-client.ts', 'reusable.ts'])
+        await writeFile(join(cwd, name), await readFile(join(root, 'test/types', name)))
       await writeFile(
         join(cwd, 'tsconfig.json'),
         JSON.stringify({
@@ -166,26 +199,96 @@ assert.equal(realpathSync(fileURLToPath(adapterCore)), realpathSync(fileURLToPat
             skipLibCheck: true,
             types: [],
           },
-          include: ['consumer.ts', 'quickstart.ts'],
+          include: ['*.ts'],
         }),
       )
       run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json'], cwd)
     } else {
       await assert.rejects(access(join(cwd, 'node_modules/@tanstack/query-core')))
       await assert.rejects(access(join(cwd, 'node_modules/react')))
+      await assert.rejects(access(join(cwd, 'node_modules/up-fetch')))
     }
     await writeFile(join(cwd, 'smoke.mjs'), adapter ? adapterSmoke : coreSmoke)
     run(manager === 'npm' ? process.execPath : 'bun', ['smoke.mjs'], cwd)
     console.log(
-      `${manager}: ${adapter ? 'adapter types, QueryClient, one core and HttpError identity' : 'core without TanStack/React'} passed`,
+      `${manager}: ${adapter ? 'adapter types, QueryClient, one core and HttpError identity' : 'core without TanStack/React/up-fetch'} passed`,
     )
   }
 }
+for (const manager of ['npm', 'bun']) {
+  const cwd = join(fixture, manager + '-query-core')
+  await mkdir(cwd)
+  await writeFile(
+    join(cwd, 'package.json'),
+    JSON.stringify({
+      name: 'sdk-query-core-fixture',
+      private: true,
+      type: 'module',
+      dependencies: {
+        'light-sdk-builder': dependencies['light-sdk-builder'],
+        'light-sdk-builder-tanstack-query': dependencies['light-sdk-builder-tanstack-query'],
+        '@tanstack/query-core': '5.105.0',
+      },
+    }),
+  )
+  run(
+    manager,
+    manager === 'npm'
+      ? ['install', '--ignore-scripts', '--no-audit', '--no-fund']
+      : ['install', '--ignore-scripts'],
+    cwd,
+  )
+  for (const optional of ['react', 'light-sdk-builder-react', 'light-sdk-builder-auth', 'up-fetch'])
+    await assert.rejects(access(join(cwd, 'node_modules', optional)))
+  await writeFile(
+    join(cwd, 'query.mjs'),
+    await readFile(join(root, 'test/query-core-plugin-fixture.mjs')),
+  )
+  run(manager === 'npm' ? process.execPath : 'bun', ['query.mjs'], cwd)
+  console.log(`${manager}: TanStack plugin with Query Core alone passed`)
+}
+for (const manager of ['npm', 'bun']) {
+  const cwd = join(fixture, manager + '-react')
+  await mkdir(cwd)
+  await writeFile(
+    join(cwd, 'package.json'),
+    JSON.stringify({
+      name: 'sdk-react-fixture',
+      private: true,
+      type: 'module',
+      dependencies: {
+        'light-sdk-builder': dependencies['light-sdk-builder'],
+        'light-sdk-builder-react': dependencies['light-sdk-builder-react'],
+        'light-sdk-builder-tanstack-query': dependencies['light-sdk-builder-tanstack-query'],
+        '@tanstack/query-core': '5.105.0',
+        '@tanstack/react-query': '5.105.0',
+        react: '19.3.1',
+        'react-dom': '19.3.1',
+      },
+    }),
+  )
+  run(
+    manager,
+    manager === 'npm'
+      ? ['install', '--ignore-scripts', '--no-audit', '--no-fund']
+      : ['install', '--ignore-scripts'],
+    cwd,
+  )
+  await assert.rejects(access(join(cwd, 'node_modules/light-sdk-builder-auth')))
+  await assert.rejects(access(join(cwd, 'node_modules/up-fetch')))
+  await writeFile(
+    join(cwd, 'react.mjs'),
+    await readFile(join(root, 'test/react-plugin-fixture.mjs')),
+  )
+  run(manager === 'npm' ? process.execPath : 'bun', ['react.mjs'], cwd)
+  console.log(`${manager}: configured TanStack React hook/provider without auth passed`)
+}
+await verifyLintPackage({ archive: dependencies['eslint-plugin-light-sdk-builder'], fixture, run })
 const report = {
   archives: Object.fromEntries(packed),
   dependencies,
   fixture,
-  mode: releaseDir ? 'release' : 'ci',
+  mode: registry ? 'registry' : releaseDir ? 'release' : 'ci',
 }
 await writeFile(join(artifacts, 'package-check.json'), JSON.stringify(report, null, 2))
 console.log(JSON.stringify(report))

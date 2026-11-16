@@ -1,0 +1,104 @@
+name: Publish beta packages
+on:
+  workflow_run:
+    workflows: [Check]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch: {}
+concurrency:
+  group: npm-beta-publication
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Require public main and its green Node matrix
+        id: gate
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url')
+            const repository = `${context.repo.owner}/${context.repo.repo}`
+            const sha = context.payload.workflow_run?.head_sha || context.sha
+            const { data: repo } = await github.rest.repos.get(context.repo)
+            const { data: branch } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' })
+            if (repo.private || branch.commit.sha !== sha) {
+              core.notice('Publication skipped: source must be public and match current main')
+              return
+            }
+            const policy = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/release-policy.mjs`).href)
+            if (!policy.trustedReleaseEvent(context.eventName, context.payload, repository, context.ref)) throw new Error('Untrusted release trigger')
+            const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({ ...context.repo, workflow_id: 'check.yml', head_sha: sha, per_page: 30 })
+            const run = runs.find(run => ['push', 'workflow_dispatch'].includes(run.event) && run.head_branch === 'main' && run.conclusion === 'success')
+            const jobs = run ? await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: run.id, filter: 'latest', per_page: 100 }) : []
+            if (!policy.verifiedCheck(run, jobs, repository, sha)) throw new Error('Current main needs successful Node 22/24/26 Check jobs before publishing')
+            core.setOutput('ready', 'true')
+      - uses: oven-sh/setup-bun@v2
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          bun-version: 1.4.4
+      - run: npm install --global npm@12.2.0
+        if: steps.gate.outputs.ready == 'true'
+      - run: bun install --frozen-lockfile --ignore-scripts
+        if: steps.gate.outputs.ready == 'true'
+      - uses: changesets/action/select-mode@v2.1.2
+        id: mode
+        if: steps.gate.outputs.ready == 'true'
+      - run: bun run build
+        if: steps.mode.outputs.mode == 'publish'
+      - run: bun run release:pack
+        if: steps.mode.outputs.mode == 'publish'
+      - run: node scripts/release-policy.mjs
+        id: plan
+        if: steps.mode.outputs.mode == 'publish'
+      - run: bun run release:check
+        if: steps.plan.outputs.has-archives == 'true'
+      - run: bunx playwright install --with-deps chromium
+        if: steps.plan.outputs.has-archives == 'true'
+      - run: bun run test:browser
+        if: steps.plan.outputs.has-archives == 'true'
+      - uses: actions/upload-artifact@v4
+        if: steps.mode.outputs.mode == 'publish'
+        with:
+          name: verified-beta-release
+          path: artifacts/release/
+      - uses: changesets/action/publish@v2.1.2
+        id: publish
+        if: steps.mode.outputs.mode == 'publish'
+        with:
+          script: bun run release:publish
+          create-github-releases: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+      - name: Verify npm tags and attach the verified archives
+        if: always() && steps.publish.outputs.published == 'true'
+        run: bun run release:finish
+        env:
+          RELEASE_PACKAGES: ${{ steps.publish.outputs.published-packages }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+      - name: No unpublished versions
+        if: steps.gate.outputs.ready == 'true' && steps.mode.outputs.mode == 'none'
+        run: echo 'All current package versions are already published.'

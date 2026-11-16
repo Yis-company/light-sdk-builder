@@ -1,6 +1,6 @@
 {
   "name": "light-sdk-builder-tanstack-query",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.4",
   "description": "TanStack Query options for light-sdk-builder.",
   "license": "Apache-2.0",
   "repository": {
@@ -20,6 +20,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
     }
   },
   "publishConfig": {
@@ -31,11 +35,28 @@
   },
   "devDependencies": {
     "@tanstack/query-core": "5.105.0",
-    "light-sdk-builder": "^0.1.0-beta.0"
+    "@tanstack/react-query": "^5.105.0",
+    "light-sdk-builder": "^0.1.0-beta.4",
+    "light-sdk-builder-react": "^0.1.0-beta.2",
+    "react": "^19.3.1"
   },
   "peerDependencies": {
     "@tanstack/query-core": "^5.105.0",
-    "light-sdk-builder": "^0.1.0-beta.0"
+    "@tanstack/react-query": "^5.105.0",
+    "light-sdk-builder": "^0.1.0-beta.4",
+    "light-sdk-builder-react": "^0.1.0-beta.2",
+    "react": "^19.3.1"
+  },
+  "peerDependenciesMeta": {
+    "light-sdk-builder-react": {
+      "optional": true
+    },
+    "@tanstack/react-query": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22"

@@ -5,11 +5,16 @@ import type {
   MutationObserverOptions,
   QueryFunctionContext,
   QueryKey,
+  QueryClient,
   QueryObserverOptions,
 } from '@tanstack/query-core'
 import {
   unwrap,
   captureInput,
+  defineSdkPlugin,
+  procedureDefinition,
+  type SdkPlugin,
+  type ProcedureDefinition,
   type CacheKey,
   type Callable,
   type CallOptions,
@@ -118,4 +123,201 @@ export function infiniteQueryOptions<T extends HttpResult, Page>(
     queryFn: async ({ signal, pageParam }: QueryFunctionContext<QueryKey, Page>) =>
       unwrap(await (await config.page(pageParam as Page)).call({ signal })),
   }
+}
+
+type ProcedureQueryOptions<A, O> = [A] extends [void]
+  ? <Selected = O>(options?: QueryOverrides<O, Selected>) => BuiltQueryOptions<O, Selected>
+  : <Selected = O>(args: A, options?: QueryOverrides<O, Selected>) => BuiltQueryOptions<O, Selected>
+type ProcedureMutationInput<V, O, Context> = Omit<
+  MutationObserverOptions<O, Error, V, NoInfer<Awaited<Context>>>,
+  'mutationFn' | 'onMutate'
+> & {
+  onMutate: (
+    ...args: Parameters<NonNullable<MutationObserverOptions<O, Error, V, unknown>['onMutate']>>
+  ) => Context
+}
+type ProcedureMutationDefaults<V, O> = Omit<
+  MutationObserverOptions<O, Error, V, unknown>,
+  'mutationFn' | 'onMutate'
+>
+type ProcedureMutationFn<V, O> = { mutationFn: (input: V) => Promise<O> }
+type ProcedureMutationOptions<P, V, O> = [P] extends [void]
+  ? {
+      <Context>(
+        options: ProcedureMutationInput<V, O, Context>,
+      ): MutationObserverOptions<O, Error, V, NoInfer<Awaited<Context>>> & ProcedureMutationFn<V, O>
+      (
+        options?: ProcedureMutationDefaults<V, O>,
+      ): ProcedureMutationDefaults<V, O> & ProcedureMutationFn<V, O>
+    }
+  : {
+      <Context>(
+        path: P,
+        options: ProcedureMutationInput<V, O, Context>,
+      ): MutationObserverOptions<O, Error, V, NoInfer<Awaited<Context>>> & ProcedureMutationFn<V, O>
+      (
+        path: P,
+        options?: ProcedureMutationDefaults<V, O>,
+      ): ProcedureMutationDefaults<V, O> & ProcedureMutationFn<V, O>
+    }
+export type ProcedureInfiniteOptions<O> = InfiniteQueryObserverOptions<
+  O,
+  Error,
+  InfiniteData<O, number>,
+  QueryKey,
+  number
+> & {
+  queryKey: DataTag<QueryKey, InfiniteData<O, number>, Error>
+  queryFn: (context: QueryFunctionContext<QueryKey, number>) => Promise<O>
+  initialPageParam: number
+}
+type ProcedureInfiniteOverrides<O> = Omit<
+  ProcedureInfiniteOptions<O>,
+  'queryKey' | 'queryFn' | 'initialPageParam' | 'getNextPageParam'
+>
+type ProcedurePageOptions<A, O> = [A] extends [void]
+  ? (options?: ProcedureInfiniteOverrides<O>) => ProcedureInfiniteOptions<O>
+  : (args: A, options?: ProcedureInfiniteOverrides<O>) => ProcedureInfiniteOptions<O>
+
+type EndpointOptions<I, R extends HttpResult> = {
+  queryOptions: <Selected = Success<R>>(
+    input: I,
+    options?: QueryOverrides<Success<R>, Selected>,
+  ) => BuiltQueryOptions<Success<R>, Selected>
+  mutationOptions: <Context = unknown>(
+    options?: Omit<MutationObserverOptions<Success<R>, Error, I, Context>, 'mutationFn'>,
+    callOptions?: CallOptions,
+  ) => MutationObserverOptions<Success<R>, Error, I, Context> & {
+    mutationFn: (input: I) => Promise<Success<R>>
+  }
+}
+
+/** @deprecated Register tanstackQuery() in createSdk; retained for earlier beta consumers. */
+export type WithTanStack<T> = T extends {
+  [procedureDefinition]: ProcedureDefinition<infer Kind, infer A, infer O, infer V, infer P>
+}
+  ? Kind extends 'mutation'
+    ? Omit<T, typeof procedureDefinition> & { mutationOptions: ProcedureMutationOptions<P, V, O> }
+    : Kind extends 'infinite'
+      ? Omit<T, typeof procedureDefinition> & {
+          queryOptions: ProcedurePageOptions<A, O>
+        }
+      : Omit<T, typeof procedureDefinition> & { queryOptions: ProcedureQueryOptions<A, O> }
+  : T extends Queryable<infer I, infer R>
+    ? [R] extends [HttpResult]
+      ? T & EndpointOptions<I, R>
+      : T
+    : T extends (...args: never[]) => unknown
+      ? T
+      : T extends object
+        ? { [K in keyof T]: WithTanStack<T[K]> }
+        : T
+
+type RuntimeDefinition = ProcedureDefinition<
+  'query' | 'mutation' | 'infinite',
+  unknown,
+  unknown,
+  unknown,
+  unknown
+>
+export function withTanStack<T>(router: T): WithTanStack<T> {
+  if (!router || typeof router !== 'object') return router as WithTanStack<T>
+  if (procedureDefinition in router) {
+    const definition = router[procedureDefinition] as RuntimeDefinition
+    if (definition.kind === 'mutation') {
+      return {
+        ...router,
+        mutationOptions: (first?: unknown, second?: Record<string, unknown>) => {
+          const path = definition.hasPath ? first : undefined
+          const options = definition.hasPath
+            ? second
+            : (first as Record<string, unknown> | undefined)
+          return {
+            mutationFn: (input: unknown) => definition.execute(definition.variables(path, input)),
+            ...options,
+          }
+        },
+      } as WithTanStack<T>
+    }
+    const methods = router as Record<string, unknown>
+    return {
+      ...methods,
+      queryOptions: (first?: unknown, second?: Record<string, unknown>) => {
+        const args = definition.hasArgs ? first : undefined
+        const options = definition.hasArgs ? second : (first as Record<string, unknown> | undefined)
+        const queryKey = definition.queryKey(args)
+        if (definition.kind === 'infinite') {
+          return {
+            initialPageParam: 1,
+            getNextPageParam: definition.getNextPageParam,
+            queryKey,
+            queryFn: ({ signal, pageParam }: QueryFunctionContext<QueryKey, number>) =>
+              definition.execute(args, { signal }, pageParam),
+            ...options,
+          }
+        }
+        return {
+          queryKey,
+          queryFn: ({ signal }: QueryFunctionContext<QueryKey>) =>
+            definition.execute(args, { signal }),
+          ...options,
+        }
+      },
+    } as WithTanStack<T>
+  }
+  if (
+    'call' in router &&
+    typeof router.call === 'function' &&
+    'key' in router &&
+    typeof router.key === 'function'
+  ) {
+    const endpoint = router as unknown as Queryable<
+      unknown,
+      { status: number; ok: true; data: unknown } | { status: number; ok: false; data: unknown }
+    >
+    return {
+      ...router,
+      queryOptions: (input: unknown, options?: QueryOverrides<unknown, unknown>) =>
+        queryOptions(endpoint, input, options),
+      mutationOptions: (
+        options?: Omit<MutationObserverOptions<unknown, Error, unknown, unknown>, 'mutationFn'>,
+        callOptions?: CallOptions,
+      ) => mutationOptions(endpoint, options, callOptions),
+    } as WithTanStack<T>
+  }
+  return Object.fromEntries(
+    Object.entries(router).map(([key, value]) => [key, withTanStack(value)]),
+  ) as WithTanStack<T>
+}
+
+/** Observe logical session changes. Credential rotation within one session preserves usable cache. */
+export function bindAuthToQueryClient(
+  queryClient: Pick<QueryClient, 'cancelQueries' | 'removeQueries'>,
+  auth: {
+    getSnapshot: () => { initialized: boolean; version: number }
+    subscribe: (listener: () => void) => () => void
+  },
+): () => void {
+  const initial = auth.getSnapshot()
+  let version = initial.initialized ? initial.version : undefined
+  return auth.subscribe(() => {
+    const next = auth.getSnapshot()
+    if (!next.initialized) return
+    if (version === undefined) {
+      version = next.version
+      return
+    }
+    if (next.version === version) return
+    version = next.version
+    void queryClient.cancelQueries()
+    queryClient.removeQueries()
+  })
+}
+
+export interface TanStackQueryPlugin extends SdkPlugin {
+  readonly output: WithTanStack<this['input']>
+}
+/** Enable TanStack once at SDK initialization, independently from route authoring. */
+export function tanstackQuery(): TanStackQueryPlugin {
+  return defineSdkPlugin<TanStackQueryPlugin>(withTanStack)
 }

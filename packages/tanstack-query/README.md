@@ -2,7 +2,7 @@
 
 TanStack Query v5 options for `light-sdk-builder` endpoints. Works with Query Core and its framework adapters; React is not required by this package.
 
-**Beta: `0.1.0-beta.0`; publication pending.** After publication:
+**Beta API.** Install with:
 
 ```sh
 npm install light-sdk-builder@beta light-sdk-builder-tanstack-query@beta @tanstack/query-core
@@ -27,3 +27,7 @@ Requires Node 22+ or a browser/Bun Fetch runtime, TypeScript 5.5+, and TanStack 
 - [Repository and development](https://github.com/Yis-company/light-sdk-builder)
 
 Apache-2.0. See LICENSE and NOTICE.
+
+For reusable definitions, register `tanstackQuery()` in `sdk.create({ http, routes, plugins: [tanstackQuery()] })`. The existing `createSdk({ routes: factory, transport, plugins: [tanstackQuery()] })` remains supported. Definitions remain core-only; plain calls and infinite page methods are retained. `withTanStack` remains a legacy compatibility helper. `bindAuthToQueryClient(queryClient, authBridge)` isolates query caches across logical sessions while preserving them during credential rotation. Auth and React bindings remain separate optional packages.
+
+The optional `/react` entry exports `createUseTanStackSdk(useTransport, routes)` for a configured SDK hook, plus QueryClient/QueryClientProvider and normal query/mutation hooks. It uses `light-sdk-builder-react/context`, with no auth dependency. Install React, React Query and the React bindings to use this entry; the main entry remains framework-neutral.
