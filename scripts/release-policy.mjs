@@ -75,6 +75,18 @@ export function verifyRegistryVersion(value, name, version) {
   return registry
 }
 
+// npm can expose a new version, tag and attestation a minute or more after publish succeeds.
+export async function retryUntilVisible(check, { attempts = 30, delayMs = 10_000 } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await check()
+    } catch (error) {
+      if (attempt >= attempts) throw error
+      await new Promise((done) => setTimeout(done, delayMs))
+    }
+  }
+}
+
 export async function readReleasePlan(root, folder) {
   const manifests = await Promise.all(
     releasePackages.map(async (directory) =>
