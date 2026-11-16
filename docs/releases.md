@@ -44,7 +44,7 @@ bun run test:browser
 
 The job builds, packs, validates and tests before `changesets/action/publish@v2.1.2` runs `bun run release:publish`. That command uses `changeset publish --from-pack-dir artifacts/release`, so it publishes the exact tested tarballs, not a second pack. Npm provenance is enabled. The Changesets action pushes package tags and creates GitHub prereleases from changelogs. The finishing step verifies npm versions, the `beta` tag and provenance, then attaches each verified archive to its GitHub release.
 
-Changesets may plan later betas for `latest` when only prereleases exist. The finishing step also advances `beta`, preserving documented `package@beta` installs. First publication can establish `latest` too. Inspect actual dist-tags after publishing; a beta version is not a stable release.
+Changesets publishes each version under one dist-tag. Below 1.0 the finishing step points both `beta` and `latest` at the new version, so `package@beta` and plain `package` installs resolve the same shared version for all five packages. From 1.0 only `beta` advances automatically; promoting a stable `latest` is a separate decision. Inspect actual dist-tags after publishing; a beta version is not a stable release.
 
 Already-published versions are skipped by Changesets. A partial failure must be investigated, then the same main release may be rerun; do not bump versions simply to retry authentication or metadata operations. Published versions are immutable.
 
@@ -52,7 +52,7 @@ Already-published versions are skipped by Changesets. A partial failure must be 
 
 The first publication needs an npm account authorized to create/publish the five unscoped package names. Supply a granular publishing token with the needed package permissions and bypass 2FA through the secure credential flow. Store it only as the repository Actions secret `NPM_TOKEN`. No token belongs in Git, logs or a committed `.npmrc`.
 
-The hosted publication job has `id-token: write` and npm 12.2.0, ready for npm trusted publishing. After the packages exist, configure each package's trusted publisher to **Yis-company/light-sdk-builder**, workflow **release.yml**, GitHub Actions. Enable npm dist-tag access as well, since later betas may need the finishing step to advance the beta tag. Verify OIDC publishing before removing the bootstrap secret or disallowing token access. No trusted publisher is assumed to exist merely because the workflow has an OIDC permission.
+The hosted publication job has `id-token: write` and npm 12.2.0, ready for npm trusted publishing. After the packages exist, configure each package's trusted publisher to **Yis-company/light-sdk-builder**, workflow **release.yml**, GitHub Actions. Enable npm dist-tag access as well, since the finishing step advances the `beta` and `latest` tags. Verify OIDC publishing before removing the bootstrap secret or disallowing token access. No trusted publisher is assumed to exist merely because the workflow has an OIDC permission.
 
 Use manual **Publish beta packages** dispatch after configuration changes or to retry a verified main release. GitHub Packages is a different registry and is not required for public npm installs.
 

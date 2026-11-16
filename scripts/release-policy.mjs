@@ -61,13 +61,23 @@ export function validateReleasePlan(plan, manifests, folder) {
   })
 }
 
+// Below 1.0 every release is a beta, so `latest` follows `beta` and plain installs get one shared version.
+export function releaseTags(version) {
+  return version.startsWith('0.') ? ['beta', 'latest'] : ['beta']
+}
+
 export function verifyRegistryVersion(value, name, version) {
   const records = Array.isArray(value) ? value : [value]
   assert.equal(records.length, 1, 'An exact npm version must resolve to one record')
   const registry = records[0]
   assert.equal(registry.name, name)
   assert.equal(registry.version, version)
-  assert.equal(registry['dist-tags']?.beta, version, 'The beta tag must resolve to this release')
+  for (const tag of releaseTags(version))
+    assert.equal(
+      registry['dist-tags']?.[tag],
+      version,
+      `The ${tag} tag must resolve to this release`,
+    )
   assert(
     registry.dist?.attestations?.url && registry.dist.attestations.provenance,
     'npm publication must include provenance attestations',
