@@ -1,5 +1,13 @@
 # light-sdk-builder-react
 
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- 6a49845: Release all five packages together under one shared version.
+- Updated dependencies [6a49845]
+  - light-sdk-builder-auth@0.1.0-beta.5
+
 ## 0.1.0-beta.2
 
 ### Minor Changes

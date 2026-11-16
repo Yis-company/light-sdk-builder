@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-light-sdk-builder",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.5",
   "description": "Opt-in route definition boundaries for light-sdk-builder.",
   "license": "Apache-2.0",
   "repository": {

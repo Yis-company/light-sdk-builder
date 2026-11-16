@@ -1,5 +1,11 @@
 # light-sdk-builder-auth
 
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- 6a49845: Release all five packages together under one shared version.
+
 ## 0.1.0-beta.0
 
 ### Minor Changes
