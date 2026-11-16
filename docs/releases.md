@@ -1,6 +1,6 @@
 # Beta releases
 
-Changesets v3 manages independent versions for five public packages: core, TanStack Query, auth, React bindings and the opt-in lint plugin. The workspace root remains `private: true` and is never published. The initial package versions are core/TanStack `0.1.0-beta.4`, React `0.1.0-beta.2`, and auth/lint `0.1.0-beta.0`. Do not reset unpublished package versions or repeat the original bootstrap.
+Changesets v3 releases five public packages in lockstep: core, TanStack Query, auth, React bindings and the opt-in lint plugin. A `fixed` group in `.changeset/config.json` gives them one shared version, so any release bumps all five. The workspace root remains `private: true` and is never published. The first public beta used per-package versions (core/TanStack `0.1.0-beta.4`, React `0.1.0-beta.2`, auth/lint `0.1.0-beta.0`); the packages share versions from `0.1.0-beta.5`. Do not reset package versions or repeat the original bootstrap.
 
 ## Record and version changes
 
