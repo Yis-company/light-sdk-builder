@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  retryUntilVisible,
   trustedReleaseEvent,
   verifiedCheck,
   validateReleasePlan,
@@ -118,4 +119,25 @@ test('npm metadata accepts object and single-record array formats but requires m
     { ...metadata, dist: {} },
   ])
     assert.throws(() => verifyRegistryVersion(invalid, manifest.name, manifest.version))
+})
+
+test('registry checks retry until the published version is visible, then give up', async () => {
+  let calls = 0
+  const visible = await retryUntilVisible(
+    () => {
+      if (++calls < 3) throw new Error('E404')
+      return 'ready'
+    },
+    { attempts: 3, delayMs: 0 },
+  )
+  assert.equal(visible, 'ready')
+  await assert.rejects(
+    retryUntilVisible(
+      () => {
+        throw new Error('still missing')
+      },
+      { attempts: 2, delayMs: 0 },
+    ),
+    /still missing/,
+  )
 })
