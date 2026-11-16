@@ -28,9 +28,9 @@ test('one reusable route tree binds independent HTTP clients and cache identitie
       { account: 'first', path: '/users' },
     ],
   )
-  assert.deepEqual(first.users.queryKey(), ['users', { account: 'first' }])
-  assert.deepEqual(second.users.queryKey(), ['users', { account: 'second' }])
-  assert.deepEqual(first.users.baseKey(), ['users'])
+  assert.deepEqual(first.users.queryKey(), ['users', {}, { account: 'first' }])
+  assert.deepEqual(second.users.queryKey(), ['users', {}, { account: 'second' }])
+  assert.deepEqual(first.users.baseKey(), ['users', {}])
   assert.equal(calls, 3)
 })
 
@@ -90,7 +90,7 @@ test('mutations, path validation and infinite page calls use the same reusable e
   )
   assert.deepEqual(api.update.queryKey({ path: { id: 7 } }), ['users', 7, 'a'])
   assert.deepEqual(await api.list.queryPage(undefined, 2), { account: 'a', page: 2 })
-  assert.deepEqual(api.list.queryKey(), ['users', 'a', 'infinite'])
+  assert.deepEqual(api.list.queryKey(), ['users', {}, 'a', 'infinite'])
 })
 
 test('a bound request signal cannot cancel another SDK instance', async () => {

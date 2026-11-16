@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { type CacheKey } from './endpoint.js'
-import { type CallOptions } from './operation.js'
+import { type CallOptions, validateSchema } from './operation.js'
 import type { HttpTransport } from './transport.js'
 
 type Schema = StandardSchemaV1
@@ -11,6 +11,16 @@ type Args<P, I> = ([P] extends [undefined] ? {} : { path: In<P> }) &
   ([I] extends [undefined] ? {} : { input: In<I> })
 type CallArgs<P, I> = [P, I] extends [undefined, undefined] ? void : Args<P, I>
 type PathArgs<P> = P extends Schema ? { path: In<P> } : void
+/** Filter arguments: a key without its input matches the procedure's queries for every input. */
+type FilterArgs<A> = [A] extends [void]
+  ? []
+  : A extends { path: infer Path; input: infer Input }
+    ? [args: { path: Path; input?: Input }]
+    : A extends { input: infer Input }
+      ? [args?: { input?: Input }]
+      : [args: A]
+/** A result without a schema is `any`; procedures give `unknown` so callers must type it first. */
+type Known<O> = 0 extends 1 & O ? unknown : O
 export type ProcedureContext<Http = unknown> = { path: string; http: Http; signal?: AbortSignal }
 export type ProcedureOptions<Http = unknown> = {
   keyContext?: (context: { http: Http }) => CacheKey
@@ -47,7 +57,7 @@ type Described<D> = { readonly [procedureDefinition]: D }
 export type QueryProcedure<A, O> = {
   query: (args: A, options?: CallOptions) => Promise<O>
   queryKey: (args: A) => CacheKey
-  baseKey: (args: A) => CacheKey
+  baseKey: (...args: FilterArgs<A>) => CacheKey
 } & Described<ProcedureDefinition<'query', A, O>>
 export type MutationProcedure<A, O, V, P> = {
   mutate: (args: A, options?: CallOptions) => Promise<O>
@@ -56,7 +66,7 @@ export type MutationProcedure<A, O, V, P> = {
 export type InfiniteProcedure<A, O> = {
   queryPage: (args: A, page: number, options?: CallOptions) => Promise<O>
   queryKey: (args: A) => CacheKey
-  baseKey: (args: A) => CacheKey
+  baseKey: (...args: FilterArgs<A>) => CacheKey
 } & Described<ProcedureDefinition<'infinite', A, O>>
 
 type InputContext<I> = [I] extends [undefined] ? {} : { input: Out<I> }
@@ -69,18 +79,23 @@ export type RequestContextConfig<Base, Args, Extra extends object, Http = unknow
 type Builder<Http, P, I, Extra extends object = {}, Deferred extends boolean = false> = {
   query: <O>(
     fn: (context: Context<Http, I, Extra>) => Promise<O>,
-  ) => Finished<Http, QueryProcedure<CallArgs<P, I>, O>, Deferred>
+  ) => Finished<Http, QueryProcedure<CallArgs<P, I>, Known<O>>, Deferred>
   mutation: <O>(
     fn: (context: Context<Http, I, Extra>) => Promise<O>,
   ) => Finished<
     Http,
-    MutationProcedure<CallArgs<P, I>, O, [I] extends [undefined] ? void : In<I>, PathArgs<P>>,
+    MutationProcedure<
+      CallArgs<P, I>,
+      Known<O>,
+      [I] extends [undefined] ? void : In<I>,
+      PathArgs<P>
+    >,
     Deferred
   >
   infiniteQuery: <O>(
     fn: (context: Context<Http, I, Extra> & { page: number }) => Promise<O>,
     next: (page: O) => number | undefined,
-  ) => Finished<Http, InfiniteProcedure<CallArgs<P, I>, O>, Deferred>
+  ) => Finished<Http, InfiniteProcedure<CallArgs<P, I>, Known<O>>, Deferred>
   input: <S extends Schema>(
     schema: S,
   ) => Builder<Http, P, S, [I] extends [undefined] ? Extra : {}, Deferred>
@@ -105,14 +120,8 @@ function described<T, D>(value: T, definition: D): T & Described<D> {
   return Object.defineProperty(value, procedureDefinition, { value: definition }) as T &
     Described<D>
 }
-async function validate<S extends Schema>(schema: S, input: unknown): Promise<Out<S>> {
-  const result = await schema['~standard'].validate(input)
-  if (result.issues)
-    throw new Error(
-      `Input validation failed: ${result.issues.map((issue) => issue.message).join(', ')}`,
-    )
-  return result.value as Out<S>
-}
+const validate = <S extends Schema>(schema: S, input: unknown) =>
+  validateSchema(schema, input) as Promise<Out<S>>
 
 /** Author callable SDKs in core. Add query-library options later through an optional adapter. */
 export function createProcedure<Http>(
@@ -189,8 +198,9 @@ function createProcedureBuilder<Http, Deferred extends boolean>(
       return parts
     }
     const pathParts = (args: A) => checkedParts(keySegments ?? rawKey(rawArgs(args).path))
-    const baseKey = (args: A): CacheKey =>
-      inputSchema ? [...pathParts(args), rawArgs(args).input] : [...pathParts(args)]
+    // The input slot is `{}` without an input: a key never prefix-matches longer paths, and as a
+    // filter prefix `{}` matches every object input.
+    const baseKey = (args: A): CacheKey => [...pathParts(args), rawArgs(args).input ?? {}]
     const variables = (path: PA, input: V): A =>
       ({ ...(path ?? {}), ...(inputSchema ? { input } : {}) }) as A
     const make = <K extends 'query' | 'mutation' | 'infinite', O>(

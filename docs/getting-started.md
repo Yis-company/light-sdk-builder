@@ -71,15 +71,15 @@ const name = await validateSchema(nonempty, 'Ada')
 
 ## Errors and cancellation
 
-| Situation                                  | Behavior                                                  |
-| ------------------------------------------ | --------------------------------------------------------- |
-| Declared HTTP status, including 4xx/5xx    | Returns `{ status, ok, data }` with validated data        |
-| `unwrap(result)` for a declared failure    | Throws `HttpError` with `.result`                         |
-| Invalid input or response schema           | Throws `ValidationError` with `.kind` and `.issues`       |
-| Invalid request path, query, or client URL | Throws `RequestError`                                     |
-| Malformed JSON response                    | Throws `ResponseDecodeError` with its cause               |
-| Undeclared HTTP status                     | Throws `UnexpectedStatusError` with `.status` and `.body` |
-| Fetch/network failure or cancellation      | Preserves the original error or abort reason              |
+| Situation                                  | Behavior                                                                                                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Declared HTTP status, including 4xx/5xx    | Returns `{ status, ok, data }` with validated data                                                                   |
+| `unwrap(result)` for a declared failure    | Throws `HttpError` with `.result`                                                                                    |
+| Invalid input or response schema           | Throws `ValidationError` with `.kind` and `.issues`; `issuePath(issue)` names the field, such as `drops.0.reference` |
+| Invalid request path, query, or client URL | Throws `RequestError`                                                                                                |
+| Malformed JSON response                    | Throws `ResponseDecodeError` with its cause                                                                          |
+| Undeclared HTTP status                     | Throws `UnexpectedStatusError` with `.status` and `.body`                                                            |
+| Fetch/network failure or cancellation      | Preserves the original error or abort reason                                                                         |
 
 ```ts
 const controller = new AbortController()
@@ -182,7 +182,9 @@ const users = procedure
 
 Context resolvers compose in declaration order. Their fields extend or replace callback fields, including `http` and `input`. Replacing an existing input schema resets its context; add context after the schema it uses. `keyContext(rawArgs, { http })` is synchronous and reads raw caller arguments plus the original client for that instance. Provide a non-secret identity whenever context changes the result; headers and resolved context never enter keys automatically. A later selector replaces the earlier selector. Constructor `createProcedure(transport, { keyContext })` supplies a default identity. Mutation keys use that default, excluding mutation variables.
 
-`queryKey(args)` appends key context to the path/input key. `baseKey(args)` omits it, for invalidation across application contexts. Infinite queries append `'infinite'` to their full key. Keys follow raw input; schema transforms apply only when the request executes.
+`queryKey(args)` appends key context to the path/input key. `baseKey(args)` omits it, for invalidation across application contexts; called without an input, it matches every object input of that procedure. A key always ends its path with an input slot, `{}` when there is no input, so a filter never matches queries on longer paths. Infinite queries append `'infinite'` to their full key. Keys follow raw input; schema transforms apply only when the request executes.
+
+A query or mutation whose function returns `any` (for example, a response without a schema) gives `unknown`; add a response schema or a return type before reading it.
 
 Calls check cancellation before/after validation, context resolution and execution. Forward the callback's `signal` to your client to cancel in-flight work. If the chosen client supports per-request defaults, bind them once:
 

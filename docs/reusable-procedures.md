@@ -72,7 +72,7 @@ A context key selector receives `(rawArgs, { http })`, where `http` is the SDK i
 })
 ```
 
-`queryKey` appends context to path/raw input; `baseKey` omits that context for broad invalidation. Infinite queries append `'infinite'`. Mutation keys include the builder's default identity and exclude mutation variables, matching the existing bound API.
+`queryKey` appends context to path/raw input (`{}` without an input); `baseKey` omits that context for broad invalidation and, without an input, matches every input. Infinite queries append `'infinite'`. Mutation keys include the builder's default identity and exclude mutation variables, matching the existing bound API.
 
 ## Ownership and cost
 
