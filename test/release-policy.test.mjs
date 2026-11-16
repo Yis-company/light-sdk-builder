@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  releaseTags,
   retryUntilVisible,
   trustedReleaseEvent,
   verifiedCheck,
@@ -97,10 +98,10 @@ test('stable versions, foreign packages and archive escapes cannot be published'
   assert.throws(() => validateReleasePlan({ version: 2, plan: [[entry]] }, [manifest], '/release'))
 })
 
-test('npm metadata accepts object and single-record array formats but requires matching beta provenance', () => {
+test('npm metadata accepts object and single-record array formats but requires matching tags and provenance', () => {
   const metadata = {
     ...manifest,
-    'dist-tags': { beta: manifest.version },
+    'dist-tags': { beta: manifest.version, latest: manifest.version },
     dist: {
       attestations: {
         url: 'https://registry.npmjs.org/attestations',
@@ -115,7 +116,8 @@ test('npm metadata accepts object and single-record array formats but requires m
     [metadata, metadata],
     { ...metadata, name: 'other' },
     { ...metadata, version: '0.1.0-beta.5' },
-    { ...metadata, 'dist-tags': { beta: '0.1.0-beta.3' } },
+    { ...metadata, 'dist-tags': { beta: '0.1.0-beta.3', latest: manifest.version } },
+    { ...metadata, 'dist-tags': { beta: manifest.version, latest: '0.1.0-beta.3' } },
     { ...metadata, dist: {} },
   ])
     assert.throws(() => verifyRegistryVersion(invalid, manifest.name, manifest.version))
@@ -140,4 +142,9 @@ test('registry checks retry until the published version is visible, then give up
     ),
     /still missing/,
   )
+})
+
+test('latest follows beta below 1.0 only', () => {
+  assert.deepEqual(releaseTags('0.1.0-beta.6'), ['beta', 'latest'])
+  assert.deepEqual(releaseTags('1.0.0-beta.0'), ['beta'])
 })
